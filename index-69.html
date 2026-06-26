@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketplace Cleanliness Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d0d10;
+  --sidebar-bg: #111114;
+  --surface: #16161a;
+  --surface2: #1e1e24;
+  --border: #252530;
+  --border2: #2e2e3a;
+  --text: #e2e2e8;
+  --muted: #5a5a6e;
+  --muted2: #8888a0;
+  --accent: #6c63f5;
+  --accent2: #4ecb8d;
+  --warn: #f0a030;
+  --danger: #e05252;
+  --info: #4a9eff;
+  --todo: #5a5a6e;
+  --reported: #f0a030;
+  --blocked: #4a9eff;
+  --rejected: #e05252;
+  --removed: #4ecb8d;
+  --unavailable: #a855f7;
+  --font: 'IBM Plex Sans', sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+  --sidebar-w: 200px;
+  --header-h: 0px;
+}
+
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; height: 100vh; display: flex; overflow: hidden; }
+
+/* ── SIDEBAR ── */
+#sidebar {
+  width: var(--sidebar-w); min-height: 100vh; background: var(--sidebar-bg);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  flex-shrink: 0; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+  transition: transform 0.2s;
+}
+.sidebar-logo {
+  padding: 20px 16px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-icon {
+  width: 28px; height: 28px; background: var(--accent); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: #fff; font-family: var(--mono); flex-shrink: 0;
+}
+.logo-text { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
+.logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; }
+
+.sidebar-section { padding: 16px 10px 8px; }
+.sidebar-section-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); padding: 0 6px; margin-bottom: 4px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+  cursor: pointer; color: var(--muted2); font-size: 12px; font-weight: 400;
+  transition: all 0.12s; margin-bottom: 1px; user-select: none;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: var(--surface2); color: var(--text); font-weight: 500; }
+.nav-item.active .nav-dot { background: var(--accent); }
+.nav-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background 0.12s; }
+.nav-icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+
+.sidebar-bottom {
+  margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--border);
+}
+.user-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+}
+.user-avatar {
+  width: 24px; height: 24px; background: var(--accent); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; color: #fff; flex-shrink: 0;
+}
+.user-name { font-size: 11px; color: var(--muted2); flex: 1; }
+.sync-badge {
+  display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted);
+  padding: 3px 8px; background: var(--surface); border-radius: 4px; margin: 0 10px 8px;
+}
+.sync-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent2); }
+.sync-dot.syncing { animation: pulse 1s infinite; background: var(--warn); }
+.sync-dot.error { background: var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── MAIN ── */
+#main { margin-left: var(--sidebar-w); flex: 1; height: 100vh; overflow-y: auto; }
+
+/* ── PAGE HEADER ── */
+.page-header {
+  padding: 24px 28px 0; display: flex; align-items: flex-end; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+}
+.page-title { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+.page-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.page-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  padding: 0 28px 16px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.filter-group { display: flex; gap: 2px; align-items: center; }
+.filter-label { font-size: 10px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4px; }
+.filter-pill {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted2);
+  cursor: pointer; transition: all 0.1s; white-space: nowrap;
+}
+.filter-pill:hover { color: var(--text); border-color: var(--border2); }
+.filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filter-sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+
+/* ── CONTENT ── */
+.page-content { padding: 0 28px 32px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── METRIC CARDS ── */
+.metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.metric-label { font-size: 10px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.metric-val { font-size: 26px; font-weight: 600; letter-spacing: -1px; font-family: var(--mono); }
+.metric-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.c-accent { color: var(--accent); } .c-info { color: var(--info); }
+.c-todo { color: var(--muted); } .c-reported { color: var(--reported); }
+.c-blocked { color: var(--blocked); } .c-rejected { color: var(--danger); }
+.c-removed { color: var(--removed); }
+
+/* ── CARDS ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.card-header { padding: 14px 16px 0; display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.card-body { padding: 14px 16px; }
+
+/* ── CHART GRID ── */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.chart-wrap { position: relative; height: 200px; }
+.chart-wrap.tall { height: 260px; }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid #1a1a20; vertical-align: middle; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.mono { font-family: var(--mono); font-size: 11px; }
+
+/* ── BADGES ── */
+.badge { display: inline-block; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; }
+.b-todo { background: #1a1a22; color: var(--muted); }
+.b-reported { background: #2a1e08; color: var(--reported); }
+.b-blocked { background: #0a1828; color: var(--blocked); }
+.b-rejected { background: #280a0a; color: var(--danger); }
+.b-removed { background: #0a1e12; color: var(--removed); }
+.b-unavailable { background: #1e0a2e; color: #a855f7; }
+
+/* ── WEEK BADGE ── */
+.week-pill { font-family: var(--mono); font-size: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; color: var(--muted); }
+
+/* ── BUTTONS ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; font-family: var(--font); font-size: 12px; font-weight: 500; cursor: pointer; border: none; transition: all 0.12s; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { background: var(--surface2); color: var(--muted2); border: 1px solid var(--border); }
+.btn-secondary:hover { color: var(--text); border-color: var(--border2); }
+.btn-green { background: #0d2018; color: var(--removed); border: 1px solid #1a3828; }
+.btn-green:hover { background: #122818; }
+.btn-slack { background: #2d0f30; color: #c084c8; border: 1px solid #4a1a50; }
+.btn-slack:hover { background: #381240; }
+.btn-danger { background: #280a0a; color: var(--danger); border: 1px solid #3a1010; }
+
+/* ── FORM ── */
+.form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.form-row2 { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 10px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+input[type=text], select, .inline-select {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text); font-family: var(--font); font-size: 12px; padding: 7px 9px;
+  outline: none; width: 100%; transition: border-color 0.12s;
+}
+input[type=text]:focus, select:focus { border-color: var(--accent); }
+.ref-hint { font-family: var(--mono); font-size: 10px; color: var(--accent2); margin-top: 2px; display: none; }
+.type-check { display: flex; align-items: center; gap: 5px; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px; font-size: 11px; color: var(--muted); cursor: pointer; transition: all 0.12s; user-select: none; }
+.type-check:hover { color: var(--text); border-color: var(--border2); }
+.type-check input[type=checkbox] { accent-color: var(--accent); width: 12px; height: 12px; cursor: pointer; }
+.type-check:has(input:checked) { background: var(--surface); border-color: var(--accent); color: var(--text); }
+
+/* ── EDIT CELLS ── */
+.edit-cell { cursor: pointer; display: flex; align-items: center; gap: 3px; min-height: 18px; }
+.edit-cell:hover .edit-icon { opacity: 1; }
+.edit-icon { opacity: 0; font-size: 9px; color: var(--accent); flex-shrink: 0; }
+.del-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px 5px; border-radius: 3px; font-size: 14px; line-height: 1; }
+.del-btn:hover { background: #280a0a; color: var(--danger); }
+
+/* ── PROGRESS BAR ── */
+.progress-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; display: none; }
+.progress-wrap.visible { display: block; }
+.progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.progress-bar-bg { background: var(--surface2); border-radius: 3px; height: 4px; overflow: hidden; }
+.progress-bar-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.3s; border-radius: 3px; }
+.progress-detail { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+/* ── REPORT PAGE ── */
+.report-section { margin-bottom: 24px; }
+.report-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; }
+.report-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 10px; }
+.report-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.report-row:last-child { border-bottom: none; }
+.report-row-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.report-row-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.report-row-meta { font-size: 11px; color: var(--muted); }
+
+/* ── LOGIN ── */
+#login-screen {
+  display: none; position: fixed; inset: 0; background: var(--bg); z-index: 1000;
+  align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+}
+.login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 320px; text-align: center; }
+.login-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.login-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+#google-signin-btn { width: 100%; background: #fff; color: #333; border: none; border-radius: 6px; padding: 11px 16px; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; }
+#google-signin-btn:hover { opacity: 0.9; }
+#login-error { margin-top: 10px; font-size: 11px; color: var(--danger); display: none; }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+/* ── LEGEND ── */
+.chart-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 12px; }
+.leg-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted); }
+.leg-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── ADD MESSAGE ── */
+#add-msg { font-size: 11px; margin-top: 8px; display: none; }
+
+@media (max-width: 900px) {
+  #sidebar { transform: translateX(-100%); }
+  #main { margin-left: 0; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div style="text-align:center">
+    <div style="font-size:22px;font-weight:600;color:var(--text);margin-bottom:4px">Market<span style="color:var(--accent)">Clean</span></div>
+    <div style="font-size:12px;color:var(--muted)">Lucky Egg Marketplace Cleanliness Report</div>
+  </div>
+  <div class="login-box">
+    <div class="login-title">Sign in to continue</div>
+    <div class="login-sub">Only @luckyegg.co accounts are permitted</div>
+    <button id="google-signin-btn" onclick="signInWithGoogle()">
+      <svg width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
+      Sign in with Google
+    </button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<nav id="sidebar" style="display:none">
+  <div class="sidebar-logo">
+    <div class="logo-icon">MC</div>
+    <div>
+      <div class="logo-text">MarketClean</div>
+      <div class="logo-sub">Lucky Egg</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Performance</div>
+    <div class="nav-item active" onclick="switchPage('overview')">
+      <span class="nav-icon">📊</span><span>Overview</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('by-marketplace')">
+      <span class="nav-icon">🏪</span><span>By Marketplace</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('by-game')">
+      <span class="nav-icon">🎮</span><span>By Game</span>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Listings</div>
+    <div class="nav-item" onclick="switchPage('all-listings')">
+      <span class="nav-icon">📋</span><span>All Listings</span>
+    </div>
+    <div class="nav-item" onclick="switchPage('log-listing')">
+      <span class="nav-icon">➕</span><span>Log Listing</span>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Reports</div>
+    <div class="nav-item" onclick="switchPage('weekly-report')">
+      <span class="nav-icon">📄</span><span>Weekly Report</span>
+    </div>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="sync-badge">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Live</span>
+    </div>
+    <div class="user-row">
+      <div class="user-avatar" id="user-avatar">H</div>
+      <div class="user-name" id="user-email">hatty@luckyegg.co</div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div id="main" style="display:none">
+
+  <!-- ── OVERVIEW ── -->
+  <div id="page-overview" class="page active">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Overview</div>
+        <div class="page-sub">All active infringements across all marketplaces</div>
+      </div>
+      <div class="page-actions">
+        <select id="overview-week" class="btn btn-secondary" style="padding:6px 10px" onchange="renderOverview()">
+          <option value="all">All time</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">Game</span>
+        <div id="game-filter-overview"></div>
+      </div>
+      <div class="filter-sep"></div>
+      <div class="filter-group">
+        <span class="filter-label">Status</span>
+        <div id="status-filter-overview"></div>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="metrics-row" id="overview-metrics"></div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">New listings over time</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-timeline"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Removals over time</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-removals"></canvas></div></div>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">By marketplace</span></div>
+          <div class="chart-legend" id="leg-market"></div>
+          <div class="card-body" style="padding-top:0"><div class="chart-wrap"><canvas id="chart-market"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Status breakdown</span></div>
+          <div class="chart-legend" id="leg-status"></div>
+          <div class="card-body" style="padding-top:0"><div class="chart-wrap"><canvas id="chart-status"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BY MARKETPLACE ── -->
+  <div id="page-by-marketplace" class="page">
+    <div class="page-header">
+      <div><div class="page-title">By Marketplace</div><div class="page-sub">Filter and browse by marketplace</div></div>
+    </div>
+    <div class="filter-bar" id="mkt-filter-bar"></div>
+    <div class="page-content">
+      <div class="metrics-row" id="mkt-metrics"></div>
+      <div class="card">
+        <div class="card-header" style="padding-bottom:12px">
+          <span class="card-title" id="mkt-table-title">All listings</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary" onclick="exportCSV(currentMarket)">Export CSV</button>
+            <select id="export-urls-week-mkt" class="btn btn-secondary" style="padding:6px 10px"></select>
+            <button class="btn btn-secondary" onclick="exportURLs(currentMarket, document.getElementById('export-urls-week-mkt').value)">Export URLs</button>
+            <button class="btn btn-secondary" id="check-btn" onclick="checkURLs()">🔍 Review listings</button>
+          </div>
+        </div>
+        <div class="progress-wrap" id="check-progress">
+          <div class="progress-header">
+            <span style="font-size:12px;color:var(--text)" id="check-status"></span>
+            <button class="btn btn-secondary" onclick="cancelCheck()" style="padding:4px 8px;font-size:11px">Stop</button>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="check-bar"></div></div>
+          <div id="check-detail" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+          <div id="review-actions" style="display:none;margin-top:10px;gap:8px;align-items:center;flex-wrap:wrap">
+            <span id="review-ref" style="font-family:var(--mono);font-size:11px;color:var(--accent2);flex:1"></span>
+            <button class="btn btn-danger" id="btn-mark-removed" style="font-size:11px;padding:5px 12px">✗ Mark removed</button>
+            <button class="btn btn-secondary" id="btn-still-live" style="font-size:11px;padding:5px 12px">✓ Still live — next</button>
+            <button class="btn btn-secondary" id="btn-skip" style="font-size:11px;padding:5px 12px">Skip</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>Ref</th><th>Game</th><th>Marketplace</th><th>Type</th><th>Status</th><th>Week</th><th>Notes</th><th></th>
+          </tr></thead><tbody id="mkt-tbody"></tbody></table>
+          <div id="mkt-empty" class="empty" style="display:none">No listings for this filter.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BY GAME ── -->
+  <div id="page-by-game" class="page">
+    <div class="page-header">
+      <div><div class="page-title">By Game</div><div class="page-sub">Infringement breakdown per game</div></div>
+    </div>
+    <div class="filter-bar" id="game-filter-bar"></div>
+    <div class="page-content">
+      <div class="metrics-row" id="game-metrics"></div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">By marketplace</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-game-mkt"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Status breakdown</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-game-status"></canvas></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header" style="padding-bottom:12px"><span class="card-title" id="game-table-title">All listings</span></div>
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>Ref</th><th>Game</th><th>Marketplace</th><th>Type</th><th>Status</th><th>Week</th><th>Notes</th><th></th>
+          </tr></thead><tbody id="game-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ALL LISTINGS ── -->
+  <div id="page-all-listings" class="page">
+    <div class="page-header">
+      <div><div class="page-title">All Listings</div><div class="page-sub" id="all-count"></div></div>
+      <div class="page-actions">
+        <select id="all-week-filter" class="btn btn-secondary" style="padding:6px 10px" onchange="renderAllListings()">
+          <option value="all">All time</option>
+        </select>
+        <button class="btn btn-secondary" onclick="exportCSV('all')">Export CSV</button>
+        <select id="export-urls-week-all" class="btn btn-secondary" style="padding:6px 10px"></select>
+        <button class="btn btn-secondary" onclick="exportURLs('all', document.getElementById('export-urls-week-all').value)">Export URLs</button>
+      </div>
+    </div>
+    <div class="filter-bar" id="all-status-filter"></div>
+    <div class="page-content">
+      <div class="card" style="margin-bottom:0">
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>Ref</th><th>Game</th><th>Marketplace</th><th>Type</th><th>Status</th><th>Week</th><th>Notes</th><th></th>
+          </tr></thead><tbody id="all-tbody"></tbody></table>
+          <div id="all-empty" class="empty" style="display:none">No listings found.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LOG LISTING ── -->
+  <div id="page-log-listing" class="page">
+    <div class="page-header">
+      <div><div class="page-title">Log Listing</div><div class="page-sub">Add a new infringing listing to the tracker</div></div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-body">
+          <div class="form-grid" style="margin-bottom:10px">
+            <div class="field">
+              <label>Listing URL</label>
+              <input type="text" id="inp-url" placeholder="Paste URL — ref extracted automatically" oninput="handleUrl()">
+              <div class="ref-hint" id="ref-hint"></div>
+            </div>
+            <div class="field">
+              <label>Marketplace</label>
+              <select id="inp-market" onchange="handleUrl()">
+                <optgroup label="Amazon">
+                  <option>Amazon US</option><option>Amazon UK</option><option>Amazon EU</option>
+                  <option>Amazon Canada</option><option>Amazon Australia</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option>eBay</option><option>Alibaba</option><option>AliExpress</option>
+                  <option>Walmart</option><option>Shein</option><option>Temu</option>
+                  <option>Fruugo</option><option>TikTok Shop</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="field">
+              <label>Game</label>
+              <select id="inp-game">
+                <option>Grab the Mic</option><option>Snort Funny</option>
+                <option>Misheard Music</option><option>Sorry What?!</option><option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Status</label>
+              <select id="inp-status">
+                <option>To do</option><option>Reported</option><option>Blocked</option>
+                <option>Rejected</option><option>Removed</option>
+              <option>Unavailable</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row2">
+            <input type="hidden" id="inp-ref">
+            <div class="field">
+              <label>Infringement type</label>
+              <div id="inp-type-wrap" style="display:flex;flex-wrap:wrap;gap:5px;padding:4px 0">
+                <label class="type-check"><input type="checkbox" value="TM"> TM</label>
+                <label class="type-check"><input type="checkbox" value="Copyright box"> Copyright box</label>
+                <label class="type-check"><input type="checkbox" value="Copyright components"> Copyright components</label>
+                <label class="type-check"><input type="checkbox" value="Copyright images"> Copyright images</label>
+                <label class="type-check"><input type="checkbox" value="Trade dress"> Trade dress</label>
+                <label class="type-check"><input type="checkbox" value="All"> All</label>
+                <label class="type-check"><input type="checkbox" value="None"> None</label>
+              </div>
+            </div>
+            <div class="field" style="justify-content:flex-end">
+              <label style="visibility:hidden">x</label>
+              <button class="btn btn-primary" id="add-btn" onclick="addListing()">+ Add listing</button>
+            </div>
+          </div>
+          <div id="add-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WEEKLY REPORT ── -->
+  <div id="page-weekly-report" class="page">
+    <div class="page-header">
+      <div><div class="page-title">Weekly Report</div><div class="page-sub">Generate and share the marketplace cleanliness report</div></div>
+    </div>
+    <div class="page-content">
+      <div class="report-section">
+        <div class="report-section-title">Report date</div>
+        <div class="report-card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <select id="report-week-picker" class="btn btn-secondary" style="padding:7px 12px;font-size:12px"></select>
+          <span style="font-size:11px;color:var(--muted)">Select week then download or share</span>
+        </div>
+      </div>
+      <div class="report-section">
+        <div class="report-section-title">What will be sent</div>
+        <div class="report-card">
+          <div class="report-row">
+            <div>
+              <div class="report-row-label">📄 PDF Report</div>
+              <div class="report-row-sub">3-page PDF with metrics, charts and per-game summaries</div>
+            </div>
+            <button class="btn btn-primary" onclick="generateWeeklyReport(document.getElementById('report-week-picker').value)">Download PDF</button>
+          </div>
+          <div class="report-row">
+            <div>
+              <div class="report-row-label">💬 Slack Summary</div>
+              <div class="report-row-sub">Structured message sent directly to #ip-enforcement</div>
+            </div>
+            <button class="btn btn-slack" id="slack-btn" onclick="sendToSlack()">Send to Slack</button>
+          </div>
+          <div class="report-row">
+            <div>
+              <div class="report-row-label">📊 Export CSV</div>
+              <div class="report-row-sub">Full listings data as a spreadsheet</div>
+            </div>
+            <button class="btn btn-secondary" onclick="exportCSV('all')">Download CSV</button>
+          </div>
+        </div>
+      </div>
+      <div class="report-section">
+        <div class="report-section-title">This week at a glance</div>
+        <div class="metrics-row" id="report-metrics"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+
+<script>
+const { createClient } = supabase;
+const supabaseClient = createClient('https://ecpwutlxsuskbtmobjpb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjcHd1dGx4c3Vza2J0bW9ianBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzkyNTIsImV4cCI6MjA5NDc1NTI1Mn0.7tkwgpf8mq7Poc_4PCrYydf62FqDSzHxxqMmlvmMDVo', {
+  auth: {
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true
+  }
+});
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('main').style.display = 'block';
+  // Set user email in sidebar
+  const email = supabaseClient.auth.getSession ? '' : '';
+  supabaseClient.auth.getSession().then(({data:{session}}) => {
+    if (session?.user?.email) {
+      const e = session.user.email;
+      document.getElementById('user-email').textContent = e;
+      document.getElementById('user-avatar').textContent = e[0].toUpperCase();
+    }
+  });
+}
+
+function showLogin(msg) {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  if (msg) {
+    document.getElementById('login-error').textContent = msg;
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+async function signInWithGoogle() {
+  const btn = document.getElementById('google-signin-btn');
+  btn.innerHTML = 'Signing in...';
+  btn.disabled = true;
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'https://ip-tracker-gamma-rouge.vercel.app',
+      queryParams: { hd: 'luckyegg.co' }
+    }
+  });
+  if (error) {
+    document.getElementById('login-error').textContent = error.message;
+    document.getElementById('login-error').style.display = 'block';
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg> Sign in with Google';
+    btn.disabled = false;
+  }
+}
+
+// Handle auth — check session on load, listen for changes
+async function initAuth() {
+  // First check if we have a session already (handles post-redirect)
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  
+  if (session) {
+    const email = session.user?.email || '';
+    if (!email.endsWith('@luckyegg.co')) {
+      await supabaseClient.auth.signOut();
+      showLogin('Access restricted to @luckyegg.co accounts only.');
+      return;
+    }
+    showApp();
+    loadListings();
+    
+    return;
+  }
+
+  // No session — show login
+  showLogin();
+
+  // Also listen for future sign-ins
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      const email = session.user?.email || '';
+      if (!email.endsWith('@luckyegg.co')) {
+        await supabaseClient.auth.signOut();
+        showLogin('Access restricted to @luckyegg.co accounts only.');
+        return;
+      }
+      showApp();
+      loadListings();
+    } else if (event === 'SIGNED_OUT') {
+      showLogin();
+    }
+  });
+}
+
+const SUPABASE_URL = 'https://ecpwutlxsuskbtmobjpb.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjcHd1dGx4c3Vza2J0bW9ianBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzkyNTIsImV4cCI6MjA5NDc1NTI1Mn0.7tkwgpf8mq7Poc_4PCrYydf62FqDSzHxxqMmlvmMDVo';
+
+const MARKETS = ['Amazon US','Amazon UK','Amazon EU','Amazon Canada','Amazon Australia','eBay','Alibaba','AliExpress','Walmart','Shein','Temu','Fruugo','TikTok Shop'];
+const AMZ = ['Amazon US','Amazon UK','Amazon EU','Amazon Canada','Amazon Australia'];
+const GAMES = ['Grab the Mic','Snort Funny','Misheard Music','Sorry What?!'];
+const STATUSES = ['To do','Reported','Blocked','Rejected','Removed','Unavailable'];
+const S_COLOR = {'To do':'#666672','Reported':'#d4a017','Blocked':'#3f8ef5','Rejected':'#e05252','Removed':'#4dab6d'};
+const S_BG = {'To do':'#222228','Reported':'#2d2410','Blocked':'#101c30','Rejected':'#2a1212','Removed':'#0e2016'};
+const S_CLASS = {'To do':'b-todo','Reported':'b-reported','Blocked':'b-blocked','Rejected':'b-rejected','Removed':'b-removed','Unavailable':'b-unavailable'};
+const M_COLORS = ['#7c6ff7','#a78bfa','#c4b5fd','#4fc8a0','#34d399','#f59e0b','#f97316','#ef4444','#007DC6','#FF5C8A','#EA4E1B','#5B9E3A','#000000'];
+const AMZ_COLORS = ['#7c6ff7','#a78bfa','#c4b5fd','#4fc8a0','#34d399'];
+const G_COLORS = ['#7c6ff7','#3f8ef5','#4fc8a0','#e05252'];
+
+let allListings = [];
+let currentMarket = 'all';
+let currentGame = 'all';
+let currentMarketDash = 'all';
+let currentStatus = 'all';
+let charts = {};
+
+// ── SUPABASE API ──────────────────────────────────────────────────────────────
+
+async function sbFetch(path, opts={}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': opts.prefer || 'return=representation',
+      ...(opts.headers||{})
+    }
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+
+
+function setSyncing(s) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (s) { dot.className='sync-dot syncing'; lbl.textContent='Syncing...'; }
+  else { dot.className='sync-dot'; lbl.textContent='Live'; }
+}
+function setError() {
+  document.getElementById('sync-dot').className='sync-dot error';
+  document.getElementById('sync-label').textContent='Connection error';
+}
+
+
+const AMZ_DOMAINS = {'amazon.com/':'Amazon US','amazon.co.uk':'Amazon UK','amazon.de':'Amazon EU','amazon.fr':'Amazon EU','amazon.es':'Amazon EU','amazon.it':'Amazon EU','amazon.ca':'Amazon Canada','amazon.com.au':'Amazon Australia'};
+const EXTRACTORS = {
+  'Amazon US': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon UK': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon EU': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon Canada': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon Australia': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'eBay': u=>{const m=u.match(/\/itm\/(?:[^/]+\/)?(\d{10,13})/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'Walmart': u=>{const m=u.match(/\/ip\/(?:[^/]+\/)?(\d+)/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'TikTok Shop': u=>{
+    // Short vm/vt links — use short code as ref, store short URL
+    const vm = u.match(/(?:vm|vt)\.tiktok\.com\/([A-Za-z0-9_-]+)/);
+    if (vm) return {ref: 'TT-' + vm[1], label: 'TikTok short link'};
+    // Full product URLs — extract numeric ID
+    const m = u.match(/\/view\/product\/(\d+)/) ||
+              u.match(/\/product\/(\d+)/) ||
+              u.match(/item_id=(\d+)/) ||
+              u.match(/[?&]id=(\d+)/) ||
+              u.match(/\/(\d{15,})/);
+    return m?{ref:m[1],label:'Product ID'}:null;
+  },
+  'AliExpress': u=>{const m=u.match(/\/item\/(\d+)/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'Alibaba': u=>{const m=u.match(/_(\d{10,})\.html/)||u.match(/\/offer\/(\d{10,})/)||u.match(/[?&]id=(\d+)/);return m?{ref:m[1],label:'Product ID'}:null;},
+  'Shein': u=>{const m=u.match(/-p-([a-zA-Z0-9]{6,})(?:\.html|[^a-zA-Z0-9]|$)/);return m?{ref:m[1],label:'Product ID'}:null;},
+  'Temu': u=>{const m=u.match(/goods[_-](\d+)/)||u.match(/g-(\d{10,})\.html/)||u.match(/-(\d{12,})\.html/);return m?{ref:m[1],label:'Goods ID'}:null;},
+  'Fruugo': u=>{const m=u.match(/\/p-(\d{5,}-\d{5,})/)||u.match(/\/p-(\d{8,})/);return m?{ref:m[1],label:'Product ID'}:null;},
+};
+function autoMarket(url) {
+  for(const [d,n] of Object.entries(AMZ_DOMAINS)) if(url.includes(d)) return n;
+  if(url.includes('ebay.')) return 'eBay';
+  if(url.includes('walmart.')) return 'Walmart';
+  if(url.includes('tiktok.com')) return 'TikTok Shop';
+  if(url.includes('aliexpress.com')) return 'AliExpress';
+  if(url.includes('alibaba.com')) return 'Alibaba';
+  if(url.includes('shein.')) return 'Shein';
+  if(url.includes('temu.com')) return 'Temu';
+  if(url.includes('fruugo.')) return 'Fruugo';
+  return null;
+}
+function handleUrl() {
+  const url = document.getElementById('inp-url').value.trim();
+  const hint = document.getElementById('ref-hint');
+  if (!url) { hint.style.display='none'; return; }
+  const det = autoMarket(url);
+  if (det) document.getElementById('inp-market').value = det;
+  const mkt = document.getElementById('inp-market').value;
+  const ex = EXTRACTORS[mkt];
+  if (!ex) return;
+  const r = ex(url);
+  if (r && r.shortened) {
+    document.getElementById('inp-ref').value = '';
+    hint.textContent = '⚠ ' + r.label;
+    hint.style.color = 'var(--reported)';
+    hint.style.display = 'block';
+  } else if (r && r.ref) {
+    document.getElementById('inp-ref').value = r.ref;
+    hint.textContent = r.label + ': ' + r.ref;
+    hint.style.color = 'var(--accent2)';
+    hint.style.display = 'block';
+  } else {
+    document.getElementById('inp-ref').value = '';
+    hint.textContent = '⚠ Could not extract ref — check marketplace is correct';
+    hint.style.color = 'var(--danger)';
+    hint.style.display = 'block';
+  }
+}
+
+// ── ADD LISTING ───────────────────────────────────────────────────────────────
+
+async function addListing() {
+  const ref = document.getElementById('inp-ref').value.trim();
+  // Strip URL to just origin + path, removing all query params
+  const rawUrl = document.getElementById('inp-url').value.trim();
+  let url = rawUrl;
+  try { const u = new URL(rawUrl); url = u.origin + u.pathname.replace(/\/$/, ''); } catch(e) {}
+  const msg = document.getElementById('add-msg');
+  if (!ref) {
+    msg.textContent = '✕ Could not extract a reference number from this URL. Check the marketplace is correct and the URL is a product page.';
+    msg.style.color = 'var(--rejected)';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = 'Adding...';
+  msg.style.display='none';
+
+  const today = new Date();
+  const week = getISOWeekLabel(today);
+
+  const typeVal = [...document.querySelectorAll('#inp-type-wrap input:checked')].map(c=>c.value).join(', ') || '';
+  const statusVal = typeVal === 'None' ? 'Blocked' : document.getElementById('inp-status').value;
+  const payload = {
+    ref, url,
+    market: document.getElementById('inp-market').value,
+    game: document.getElementById('inp-game').value,
+    status: statusVal,
+    type: typeVal,
+    notes: '',
+    date_added: today.toISOString().split('T')[0],
+    week_label: week
+  };
+
+  try {
+    await sbFetch('listings', { method:'POST', prefer:'return=minimal', body: JSON.stringify(payload) });
+    allListings.unshift({...payload, id: Date.now()});
+        renderCurrentPage();
+    document.getElementById('inp-ref').value='';
+    document.getElementById('inp-url').value='';
+    document.querySelectorAll('#inp-type-wrap input').forEach(c=>c.checked=false);
+    document.getElementById('ref-hint').style.display='none';
+    msg.textContent='✓ Listing added successfully'; msg.style.color='var(--removed)'; msg.style.display='block';
+    setTimeout(()=>msg.style.display='none', 3000);
+  } catch(e) {
+    const msg_text = e.message || '';
+    if (msg_text.includes('unique') || msg_text.includes('duplicate') || msg_text.includes('23505')) {
+      msg.textContent='⚠ This listing already exists for this marketplace';
+      msg.style.color='var(--reported)';
+    } else {
+      msg.textContent='✕ Error: '+msg_text.substring(0, 200);
+      msg.style.color='var(--rejected)';
+    }
+    msg.style.display='block';
+  }
+  btn.disabled=false; btn.textContent='+ Add listing';
+}
+
+
+function getISOWeekLabel(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const week = Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+
+async function del(id) {
+  if (!confirm('Delete this listing?')) return;
+  try {
+    await sbFetch(`listings?id=eq.${id}`, { method:'DELETE', prefer:'return=minimal' });
+    allListings = allListings.filter(l=>l.id!==id);
+    renderCurrentPage();
+  } catch(e) { alert('Error deleting: '+e.message); }
+}
+
+// ── INLINE EDIT ───────────────────────────────────────────────────────────────
+
+async function updateField(id, field, value) {
+  const listing = allListings.find(l=>l.id===id);
+  if (!listing) return;
+  const old = listing[field];
+  listing[field] = value;
+  try {
+    await sbFetch(`listings?id=eq.${id}`, { method:'PATCH', prefer:'return=minimal', body: JSON.stringify({[field]: value}) });
+  } catch(e) {
+    listing[field] = old;
+    alert('Error saving: '+e.message);
+  }
+  renderCurrentPage();
+}
+
+
+function populateReportPicker() {
+  const picker = document.getElementById('report-week-picker');
+  if (!picker) return;
+  const weeks = [...new Set(allListings.map(l=>l.week_label).filter(Boolean))].sort().reverse();
+  const currentWeek = getISOWeekLabel(new Date());
+  // Add current week even if no data yet
+  const allWeeks = weeks.includes(currentWeek) ? weeks : [currentWeek, ...weeks];
+  picker.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
+}
+
+
+const AMAZON_MARKETS = ['Amazon US','Amazon UK','Amazon EU','Amazon Canada','Amazon Australia'];
+
+let checkCancelled = false;
+let reviewResolve = null;
+
+function cancelCheck() {
+  checkCancelled = true;
+  if (reviewResolve) reviewResolve('skip');
+  document.getElementById('check-progress').classList.remove('visible');
+  document.getElementById('check-btn').disabled = false;
+  document.getElementById('check-btn').textContent = '🔍 Review listings';
+}
+
+async function checkURLs() {
+  const btn = document.getElementById('check-btn');
+  const progress = document.getElementById('check-progress');
+  const statusEl = document.getElementById('check-status');
+  const barEl = document.getElementById('check-bar');
+  const detailEl = document.getElementById('check-detail');
+  const reviewActions = document.getElementById('review-actions');
+  const reviewRef = document.getElementById('review-ref');
+
+  // Get listings to review — non-removed, non-Fruugo, with URLs
+  const toCheck = allListings.filter(l =>
+    l.url && l.url.trim() !== '' &&
+    l.status !== 'Removed' &&
+    l.status !== 'Unavailable' &&
+    l.market !== 'Fruugo'
+  );
+
+  if (!toCheck.length) { alert('No listings with URLs to review.'); return; }
+
+  checkCancelled = false;
+  btn.disabled = true;
+  btn.textContent = 'Reviewing...';
+  progress.classList.add('visible');
+  barEl.style.width = '0%';
+  reviewActions.style.display = 'none';
+
+  // Wire up buttons once
+  document.getElementById('btn-mark-removed').onclick = () => { if (reviewResolve) reviewResolve('removed'); };
+  document.getElementById('btn-still-live').onclick  = () => { if (reviewResolve) reviewResolve('live'); };
+  document.getElementById('btn-skip').onclick        = () => { if (reviewResolve) reviewResolve('skip'); };
+
+  let reviewed = 0, removed = 0;
+
+  for (const listing of toCheck) {
+    if (checkCancelled) break;
+
+    reviewed++;
+    barEl.style.width = `${Math.round((reviewed / toCheck.length) * 100)}%`;
+    statusEl.textContent = `${reviewed} of ${toCheck.length} — ${removed} marked removed`;
+    detailEl.textContent = `${listing.market} · ${listing.game}`;
+    reviewRef.textContent = listing.ref;
+    reviewActions.style.display = 'flex';
+
+    // Open listing in new tab
+    chrome.tabs ? chrome.tabs.create({ url: listing.url }) : window.open(listing.url, '_blank');
+
+    // Wait for user decision
+    const decision = await new Promise(resolve => { reviewResolve = resolve; });
+    reviewResolve = null;
+
+    if (decision === 'removed') {
+      await updateField(listing.id, 'status', 'Removed');
+      removed++;
+      detailEl.textContent = `✓ Marked removed: ${listing.ref}`;
+    }
+    if (checkCancelled) break;
+  }
+
+  reviewActions.style.display = 'none';
+  barEl.style.width = '100%';
+  statusEl.textContent = `Done — ${removed} marked removed, ${reviewed - removed} still live`;
+  detailEl.textContent = '';
+  btn.disabled = false;
+  btn.textContent = '🔍 Review listings';
+  if (removed > 0) renderCurrentPage();
+  setTimeout(() => { progress.classList.remove('visible'); }, 8000);
+}
+
+
+function populateWeekSelectors() {
+  const weeks = [...new Set(allListings.map(l=>l.week_label).filter(Boolean))].sort().reverse();
+  const cw = getISOWeekLabel(new Date());
+  const all = weeks.includes(cw)?weeks:[cw,...weeks];
+  ['overview-week','all-week-filter','report-week-picker'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    const noAll = ['report-week-picker','export-urls-week-mkt','export-urls-week-all'];
+    el.innerHTML=(!noAll.includes(id)?'<option value="all">All time</option>':'') + all.map(w=>`<option value="${w}">${w}</option>`).join('');
+    if(all.includes(cur)) el.value=cur;
+  });
+}
+
+// Override loadListings to also trigger page render
+const _origLoad = loadListings;
+
+document.addEventListener('click', function(e) {
+  const fp = e.target.closest('.filter-pill');
+  if (!fp) return;
+  if (fp.dataset.ovg!==undefined) { overviewGame=fp.dataset.ovg; renderOverview(); }
+  else if (fp.dataset.ovs!==undefined) { overviewStatus=fp.dataset.ovs; renderOverview(); }
+  else if (fp.dataset.mkt!==undefined) { currentMarket=fp.dataset.mkt; renderByMarketplace(); }
+  else if (fp.dataset.gp!==undefined) { currentGame=fp.dataset.gp; renderByGame(); }
+  else if (fp.dataset.sa!==undefined) { currentStatus=fp.dataset.sa; renderAllListings(); }
+});
+
+
+
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+// Patch loadListings to also render current page
+async function loadListings() {
+  setSyncing(true);
+  try {
+    const data = await sbFetch('listings?select=*&order=date_added.desc,id.desc');
+    allListings = data || [];
+    populateWeekSelectors();
+    renderCurrentPage();
+    setSyncing(false);
+  } catch(e) { setError(); console.error(e); }
+}
+
+initAuth();
+setInterval(loadListings, 60000);
+
+</script>
+</body>
+</html>
