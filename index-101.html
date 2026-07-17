@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketClean — Lucky Egg</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d10;--surface:#16161a;--surface2:#1e1e24;--border:#252530;
+  --text:#e2e2e8;--muted:#5a5a6e;--muted2:#8888a0;
+  --accent:#6c63f5;--accent2:#4ecb8d;
+  --todo:#5a5a6e;--reported:#f0a030;--blocked:#4a9eff;--rejected:#e05252;--removed:#4ecb8d;--unavailable:#a855f7;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;min-height:100vh;display:flex}
+
+/* SIDEBAR */
+.sidebar{width:200px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo .logo-text{font-size:16px;font-weight:700;letter-spacing:-0.5px}
+.sidebar-logo .logo-text span{color:var(--accent)}
+.sidebar-logo .logo-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.sidebar-section{padding:12px 8px 4px;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted2);transition:all 0.15s;margin:1px 6px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--text);border-left:2px solid var(--accent)}
+.nav-item .nav-icon{width:14px;text-align:center;flex-shrink:0}
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
+.sync-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--removed);flex-shrink:0}
+.sync-dot.syncing{background:var(--reported);animation:pulse 1s infinite}
+.sync-dot.error{background:var(--rejected)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* MAIN */
+.main{margin-left:200px;flex:1;min-height:100vh;padding:28px 32px;max-width:1400px}
+.page{display:none}.page.active{display:block}
+.page-header{margin-bottom:24px}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-0.5px}
+.page-sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:14px}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
+.metric-val{font-size:26px;font-weight:600;letter-spacing:-1px}
+
+/* BUTTONS */
+.btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 14px;font-family:var(--font);font-size:12px;font-weight:500;color:var(--muted2);cursor:pointer;transition:all 0.15s}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{opacity:0.88;color:#fff}
+.btn-danger{background:#2a1212;border-color:var(--rejected);color:var(--rejected)}
+.btn-danger:hover{background:var(--rejected);color:#fff}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+
+/* FILTER PILLS */
+.filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
+.filter-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:500;color:var(--muted2);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.filter-pill:hover{color:var(--text)}
+.filter-pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.filter-group{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.filter-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-right:4px}
+
+/* TABLE */
+.tbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.tbar-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tbar-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.count-badge{font-size:11px;color:var(--muted);font-weight:500}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #1a1a20;vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.mono{font-family:var(--mono);font-size:11px}
+
+/* BADGES */
+.badge{display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:4px}
+.b-todo{background:#1a1a22;color:var(--todo)}
+.b-reported{background:#2a1e08;color:var(--reported)}
+.b-blocked{background:#0e1c30;color:var(--blocked)}
+.b-rejected{background:#2a1010;color:var(--rejected)}
+.b-removed{background:#0a1e12;color:var(--removed)}
+.b-unavailable{background:#1e0a2e;color:var(--unavailable)}
+.week-badge{display:inline-block;font-size:10px;font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--muted)}
+
+/* INLINE EDIT */
+.inline-select{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:3px 6px;cursor:pointer;outline:none}
+.inline-select:focus{border-color:var(--accent)}
+.edit-cell{cursor:pointer;display:flex;align-items:center;gap:4px;min-height:18px}
+.edit-cell:hover .edit-icon{opacity:1}
+.edit-icon{opacity:0;font-size:10px;color:var(--accent);flex-shrink:0;transition:opacity 0.1s}
+.del-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:14px}
+.del-btn:hover{background:#2a1010;color:var(--rejected)}
+
+/* CHARTS */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+.chart-card h3{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:14px}
+.chart-wrap{position:relative;height:200px}
+.chart-wrap.tall{height:260px}
+
+/* FORM */
+.form-field{margin-bottom:12px}
+.form-field label{display:block;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px}
+input[type=text],select,.form-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:12px;padding:8px 10px;outline:none;width:100%;transition:border-color 0.15s}
+input[type=text]:focus,select:focus,.form-input:focus{border-color:var(--accent)}
+.ref-hint{font-family:var(--mono);font-size:10px;margin-top:4px;display:none}
+.type-wrap{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0}
+.type-chk{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:11px;color:var(--muted2);cursor:pointer;user-select:none;transition:all 0.1s}
+.type-chk input{accent-color:var(--accent);width:11px;height:11px;cursor:pointer}
+.type-chk:has(input:checked){background:#1e1a3a;border-color:var(--accent);color:var(--text)}
+.add-msg{font-size:12px;margin-top:10px;display:none}
+
+/* PROGRESS */
+.progress-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:14px;display:none}
+.progress-wrap.visible{display:block}
+.progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.progress-bar-bg{background:var(--surface2);border-radius:4px;height:5px;overflow:hidden}
+.progress-bar-fill{background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:4px}
+.progress-detail{font-size:11px;color:var(--muted);margin-top:6px}
+
+
+
+/* TRADE DRESS */
+.td-funnel{display:flex;align-items:stretch;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.td-fcol{flex:1;min-width:160px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.td-fhead{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:10px}
+.td-ftot{font-family:var(--mono);font-size:14px;color:var(--text);font-weight:600}
+.td-frow{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.td-fn{font-family:var(--mono);font-size:12px;color:var(--muted2)}
+.td-farrow{display:flex;align-items:center;color:var(--muted);font-size:18px;flex-shrink:0}
+.b-pending{background:#0e1c30;color:var(--blocked)}
+.b-accepted{background:#0a1e12;color:var(--removed)}
+.b-rejleft{background:#2a1010;color:var(--rejected)}
+.b-rejadv{background:#2a1e08;color:var(--reported)}
+.td-import textarea{width:100%;min-height:90px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:10px;outline:none;resize:vertical}
+.td-import textarea:focus{border-color:var(--accent)}
+.td-preview{margin-top:10px;font-size:11px}
+.td-box{border:none;border-radius:6px;padding:6px 10px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;outline:none;width:118px;-webkit-appearance:none;appearance:none}
+.td-box.is-empty{background:var(--surface2);color:var(--muted)}
+.td-box.is-yellow{background:var(--reported);color:#1c1400}
+.td-box.is-blue{background:var(--blocked);color:#fff}
+.td-box.is-green{background:var(--removed);color:#04140b}
+.td-box.is-teal{background:#0f3d3a;color:#5fe3d2}
+.td-box.is-red{background:var(--rejected);color:#fff}
+.td-week{min-width:104px;width:auto;font-size:11px}
+.td-cell{display:inline-flex;flex-direction:column;gap:3px;align-items:stretch}
+.td-box-time{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;line-height:1.2;min-height:12px}
+.td-box-time.is-slow{color:var(--rejected)}
+.td-slow{color:var(--rejected);font-weight:700;font-family:var(--font)}
+.td-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.td-file input[type=file]{font-size:11px;color:var(--muted2)}
+.td-file input[type=file]::file-selector-button{background:var(--accent);border:none;border-radius:6px;color:#fff;font-family:var(--font);font-size:11px;font-weight:500;padding:7px 14px;cursor:pointer;margin-right:10px}
+
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+
+
+<div id="app" style="display:flex;width:100%">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">Market<span>Clean</span></div>
+      <div class="logo-sub">Lucky Egg</div>
+    </div>
+    <div class="sidebar-section">Performance</div>
+    <div class="nav-item active" onclick="switchPage('overview')" id="nav-overview"><span class="nav-icon">📊</span>Overview</div>
+    <div class="nav-item" onclick="switchPage('by-market')" id="nav-by-market"><span class="nav-icon">🏪</span>By Marketplace</div>
+    <div class="nav-item" onclick="switchPage('by-game')" id="nav-by-game"><span class="nav-icon">🎮</span>By Game</div>
+    <div class="sidebar-section">Listings</div>
+    <div class="nav-item" onclick="switchPage('all-listings')" id="nav-all-listings"><span class="nav-icon">📋</span>All Listings</div>
+    <div class="nav-item" onclick="switchPage('log-listing')" id="nav-log-listing"><span class="nav-icon">➕</span>Log Listing</div>
+    <div class="sidebar-section">Reports</div>
+    <div class="nav-item" onclick="switchPage('weekly-report')" id="nav-weekly-report"><span class="nav-icon">📄</span>Weekly Report</div>
+    <div class="sidebar-section">Enforcement</div>
+    <div class="nav-item" onclick="switchPage('trade-dress')" id="nav-trade-dress"><span class="nav-icon">⚖️</span>Trade Dress</div>
+    <div class="sidebar-footer">
+      <div class="sync-row"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Connected</span></div>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <div class="page-title">Overview</div>
+        <div class="page-sub">All-time marketplace infringement data</div>
+      </div>
+      <div class="metrics" id="overview-metrics"></div>
+      <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--muted)">Filter week:</span>
+        <select id="overview-week" style="width:auto;font-size:11px;padding:4px 8px" onchange="renderOverview()"><option value="all">All time</option></select>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>New listings added per week</h3><div class="chart-wrap"><canvas id="c-new-over-time"></canvas></div></div>
+        <div class="chart-card"><h3>Removals per week (by date removed)</h3><div class="chart-wrap"><canvas id="c-removals-over-time"></canvas></div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Active listings by marketplace</h3><div class="chart-wrap"><canvas id="c-by-market"></canvas></div></div>
+        <div class="chart-card"><h3>New listings by game</h3><div class="chart-wrap"><canvas id="c-status"></canvas></div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>Trade dress — ABR outcomes</h3><div class="chart-wrap"><canvas id="c-td-outcomes"></canvas></div></div>
+        <div class="chart-card"><h3>Trade dress cases added per week</h3><div class="chart-wrap"><canvas id="c-td-over-time"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- BY MARKETPLACE -->
+    <div class="page" id="page-by-market">
+      <div class="page-header"><div class="page-title">By Marketplace</div></div>
+      <div class="filter-bar" id="market-pills"></div>
+      <div class="metrics" id="market-metrics"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="tbar" style="padding:14px 16px 0">
+          <div class="tbar-left"><span class="count-badge" id="market-count"></span></div>
+          <div class="tbar-right">
+            <button class="btn" id="check-btn" onclick="checkURLs()">🔍 Review listings</button>
+          </div>
+        </div>
+        <div class="progress-wrap" id="check-progress" style="margin:10px 16px">
+          <div class="progress-header">
+            <span style="font-size:12px;color:var(--text)" id="check-status"></span>
+            <button class="btn" onclick="cancelCheck()" style="padding:4px 8px;font-size:11px">Stop</button>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="check-bar"></div></div>
+          <div class="progress-detail" id="check-detail"></div>
+          <div id="review-actions" style="display:none;margin-top:10px;gap:8px;align-items:center;flex-wrap:wrap">
+            <span id="review-ref" style="font-family:var(--mono);font-size:11px;color:var(--accent2);flex:1"></span>
+            <button class="btn btn-danger" id="btn-mark-removed" style="font-size:11px;padding:5px 12px">✗ Mark removed</button>
+            <button class="btn" id="btn-still-live" style="font-size:11px;padding:5px 12px">✓ Still live — next</button>
+            <button class="btn" id="btn-skip" style="font-size:11px;padding:5px 12px">Skip</button>
+          </div>
+        </div>
+        <div class="table-wrap" style="padding:0 0 4px">
+          <table><thead><tr><th>Ref</th><th>Game</th><th>Type</th><th>Status</th><th>Uploaded</th><th>Week</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="market-tbody"></tbody></table>
+          <div class="empty" id="market-empty" style="display:none">No listings for this marketplace.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BY GAME -->
+    <div class="page" id="page-by-game">
+      <div class="page-header"><div class="page-title">By Game</div></div>
+      <div class="filter-bar" id="game-pills"></div>
+      <div class="metrics" id="game-metrics"></div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>By marketplace</h3><div class="chart-wrap"><canvas id="c-game-market"></canvas></div></div>
+        <div class="chart-card"><h3>By status</h3><div class="chart-wrap"><canvas id="c-game-status"></canvas></div></div>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Ref</th><th>Marketplace</th><th>Type</th><th>Status</th><th>Uploaded</th><th>Week</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="game-tbody"></tbody></table>
+        <div class="empty" id="game-empty" style="display:none">No listings for this game.</div>
+      </div>
+    </div>
+
+    <!-- ALL LISTINGS -->
+    <div class="page" id="page-all-listings">
+      <div class="page-header"><div class="page-title">All Listings</div></div>
+      <div class="filter-bar" id="all-status-filter"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="tbar" style="padding:14px 16px 0">
+          <div class="tbar-left"><span class="count-badge" id="all-count"></span></div>
+          <div class="tbar-right">
+            <select id="all-week-filter" class="btn" style="padding:6px 10px" onchange="renderAllListings()"></select>
+            <select id="export-urls-week-all" class="btn" style="padding:6px 10px"></select>
+            <button class="btn" onclick="exportURLs('all', document.getElementById('export-urls-week-all').value)">Export URLs</button>
+            <button class="btn" onclick="exportCSV('all')">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap" style="padding:0 0 4px">
+          <table><thead><tr><th>Ref / URL</th><th>Game</th><th>Marketplace</th><th>Type</th><th>Status</th><th>Uploaded</th><th>Week</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="all-tbody"></tbody></table>
+          <div class="empty" id="all-empty" style="display:none">No listings found.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOG LISTING -->
+    <div class="page" id="page-log-listing">
+      <div class="page-header"><div class="page-title">Log Listing</div><div class="page-sub">Add a new infringing listing to the tracker</div></div>
+      <div class="card">
+        <div class="form-field">
+          <label>Listing URL</label>
+          <input type="text" id="inp-url" placeholder="Paste URL — ref extracted automatically" oninput="handleUrl()">
+          <div class="ref-hint" id="ref-hint"></div>
+          <input type="hidden" id="inp-ref">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="form-field" style="margin:0">
+            <label>Marketplace</label>
+            <select id="inp-market" onchange="handleUrl()">
+              <option>Amazon US</option><option>Amazon UK</option><option>Amazon EU</option>
+              <option>Amazon Canada</option><option>Amazon Australia</option>
+              <option>eBay</option><option>Alibaba</option><option>AliExpress</option>
+              <option>Walmart</option><option>Shein</option><option>Temu</option>
+              <option>Fruugo</option><option>TikTok Shop</option><option>OnBuy</option><option>Wowcher</option><option>Groupon</option><option>Argos</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-field" style="margin:0">
+            <label>Game</label>
+            <select id="inp-game">
+              <option>Grab the Mic</option><option>Snort Funny</option>
+              <option>Misheard Music</option><option>Sorry What?!</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Status</label>
+          <select id="inp-status">
+            <option>To do</option><option>Reported</option><option>Blocked</option>
+            <option>Rejected</option><option>Removed</option><option>Unavailable</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Infringement type</label>
+          <div class="type-wrap" id="inp-type-wrap">
+            <label class="type-chk"><input type="checkbox" value="TM"> TM</label>
+            <label class="type-chk"><input type="checkbox" value="Copyright box"> Copyright box</label>
+            <label class="type-chk"><input type="checkbox" value="Copyright components"> Copyright components</label>
+            <label class="type-chk"><input type="checkbox" value="Copyright images"> Copyright images</label>
+            <label class="type-chk"><input type="checkbox" value="Trade dress"> Trade dress</label>
+            <label class="type-chk"><input type="checkbox" value="All"> All</label>
+            <label class="type-chk"><input type="checkbox" value="None"> None</label>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="add-btn" onclick="addListing()">+ Add listing</button>
+        <div class="add-msg" id="add-msg"></div>
+      </div>
+    </div>
+
+    <!-- WEEKLY REPORT -->
+    <div class="page" id="page-weekly-report">
+      <div class="page-header"><div class="page-title">Weekly Report</div><div class="page-sub">Generate and send the weekly IP enforcement report</div></div>
+      <div class="card">
+        <div class="form-field">
+          <label>Select week</label>
+          <select id="report-week-picker" style="width:auto" onchange="renderReportPreview()"></select>
+        </div>
+        <div class="form-field" style="margin-top:12px">
+          <label>Test destination (optional)</label>
+          <input type="text" id="report-test-webhook" placeholder="Paste a personal Slack webhook to send this report only to yourself">
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Leave blank to post to #ip-enforcement. Paste a private channel's webhook to trial it privately first.</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+          <button class="btn btn-primary" onclick="generateWeeklyReport()">📄 Download PDF</button>
+          <button class="btn" onclick="sendToSlack()">💬 Send to Slack</button>
+          <button class="btn" onclick="exportCSV('all')">📊 Export CSV</button>
+        </div>
+        <div class="add-msg" id="report-msg" style="margin-top:10px"></div>
+      </div>
+      <div class="card" id="report-preview" style="margin-top:16px"></div>
+    </div>
+
+    <!-- TRADE DRESS -->
+    <div class="page" id="page-trade-dress">
+      <div class="page-header">
+        <div class="page-title">Trade Dress</div>
+        <div class="page-sub">Enforcement funnel: ABR &rarr; C&amp;D letter &rarr; legal action</div>
+      </div>
+      <div class="metrics" id="td-metrics"></div>
+      <div class="card" id="td-timing" style="margin-bottom:20px"></div>
+      <div id="td-funnel" class="td-funnel"></div>
+
+      <div class="card td-import">
+        <div class="card-title">Import Corsearch weekly summary</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Upload the Corsearch Excel file (every sheet in it is read), or paste rows below. Rows not labelled Trade dress are skipped. Cases already tracked have their ABR box and Corsearch status updated; C&amp;D and Legal Action boxes are never touched.</div>
+        <div class="td-file">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="tdImportFile(this)">
+        </div>
+        <div class="form-field" style="margin-top:10px">
+          <label>Week to file these under</label>
+          <select id="td-import-week" style="width:auto"></select>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Corsearch summaries usually cover the previous week. Set this before importing.</div>
+        </div>
+        <details style="margin-top:4px">
+          <summary style="font-size:11px;color:var(--muted);cursor:pointer">Or paste rows instead</summary>
+          <textarea id="td-import-text" style="margin-top:8px" placeholder="https://www.amazon.co.uk/dp/B0XXXXXXXX&#9;Trade dress&#9;Under Review&#9;optional comment"></textarea>
+          <button class="btn" onclick="tdParseImport()" style="margin-top:8px">Preview paste</button>
+        </details>
+        <div style="margin-top:10px"><button class="btn btn-primary" id="td-import-btn" onclick="tdRunImport()" style="display:none">Import</button></div>
+        <div class="td-preview" id="td-preview"></div>
+      </div>
+
+      <div class="tbar">
+        <div class="tbar-left" id="td-stage-filter"></div>
+        <div class="tbar-right"><span class="count-badge" id="td-count"></span></div>
+      </div>
+      <div class="filter-bar" id="td-outcome-filter"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ref</th><th>Market</th><th>Game</th><th>ABR</th><th>C&amp;D letter</th><th>Legal Action</th><th>Corsearch status</th><th>Comment</th><th>Week</th><th></th></tr></thead>
+          <tbody id="td-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="td-empty" style="display:none">No trade dress cases yet. Paste a Corsearch summary above to import.</div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ecpwutlxsuskbtmobjpb.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjcHd1dGx4c3Vza2J0bW9ianBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzkyNTIsImV4cCI6MjA5NDc1NTI1Mn0.7tkwgpf8mq7Poc_4PCrYydf62FqDSzHxxqMmlvmMDVo';
+const SLACK_EDGE = 'https://ecpwutlxsuskbtmobjpb.supabase.co/functions/v1/slack-report';
+const EDGE_CHECK_URL = 'https://ecpwutlxsuskbtmobjpb.supabase.co/functions/v1/check-urls';
+
+const MARKETS = ['Amazon US','Amazon UK','Amazon EU','Amazon Canada','Amazon Australia','eBay','Alibaba','AliExpress','Walmart','Shein','Temu','Fruugo','TikTok Shop','OnBuy','Wowcher','Groupon','Argos'];
+const GAMES = ['Grab the Mic','Snort Funny','Misheard Music','Sorry What?!'];
+const STATUSES = ['To do','Reported','Blocked','Rejected','Removed','Unavailable'];
+const S_COLOR = {'To do':'#5a5a6e','Reported':'#f0a030','Blocked':'#4a9eff','Rejected':'#e05252','Removed':'#4ecb8d','Unavailable':'#a855f7'};
+const S_CLASS = {'To do':'b-todo','Reported':'b-reported','Blocked':'b-blocked','Rejected':'b-rejected','Removed':'b-removed','Unavailable':'b-unavailable'};
+const M_COLORS = ['#6c63f5','#8b83f7','#a9a3f9','#4ecb8d','#3ab87a','#f0a030','#e07020','#e05252','#007DC6','#FF5C8A','#EA4E1B','#5B9E3A','#c084fc'];
+const G_COLORS = ['#6c63f5','#4a9eff','#4ecb8d','#e05252'];
+
+const TD_STAGES = ['ABR','C&D','Court'];
+const TD_STAGE_FIELD = {'ABR':'abr_outcome','C&D':'cd_outcome','Court':'court_outcome'};
+const TD_STAGE_LABEL = {'ABR':'ABR','C&D':'C&D letter','Court':'Legal Action'};
+const TD_OUTCOMES = ['Pending','Taken down','Accepted, still live','Rejected'];
+const TD_BOX_CLASS = {'':'is-empty','Pending':'is-yellow','Taken down':'is-green','Accepted, still live':'is-teal','Rejected':'is-red'};
+
+let allListings = [];
+let currentMarket = 'all';
+let currentGame = 'all';
+let currentStatus = 'all';
+let charts = {};
+let currentPage = 'overview';
+let tradeDress = [];
+let tdStage = 'all';
+let tdTimingStage = 'ABR';
+let tdOutcome = 'all';
+let tdParsed = [];
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+function initAuth() { loadListings(); loadTradeDress(); }
+
+// ── SUPABASE ──────────────────────────────────────────────────────────────────
+async function sbFetch(path, opts={}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json', 'Prefer': opts.prefer || 'return=representation',
+      ...(opts.headers||{})
+    }
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function loadListings() {
+  setSyncing(true);
+  try {
+    const data = await sbFetch('listings?select=*&order=date_added.desc,id.desc');
+    allListings = data || [];
+    populateWeekSelectors();
+    renderCurrentPage();
+    setSyncing(false);
+  } catch(e) { setError(); console.error(e); }
+}
+
+function setSyncing(s) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (s) { dot.className='sync-dot syncing'; lbl.textContent='Syncing...'; }
+  else { dot.className='sync-dot'; lbl.textContent='Live'; }
+}
+function setError() {
+  document.getElementById('sync-dot').className='sync-dot error';
+  document.getElementById('sync-label').textContent='Connection error';
+}
+
+// ── WEEK SELECTORS ────────────────────────────────────────────────────────────
+function getISOWeekLabel(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const week = Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+function populateWeekSelectors() {
+  const weeksSet = new Set(allListings.map(l=>l.week_label).filter(Boolean));
+  tradeDress.forEach(c=>{ if (c.week_label) weeksSet.add(c.week_label); });
+  weeksSet.add(getISOWeekLabel(new Date()));
+  const all = [...weeksSet].sort().reverse();
+  const noAll = ['report-week-picker','export-urls-week-all'];
+  ['overview-week','all-week-filter','report-week-picker','export-urls-week-all'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    const cur = el.value;
+    el.innerHTML = (!noAll.includes(id) ? '<option value="all">All time</option>' : '') +
+      all.map(w=>`<option value="${w}">${w}</option>`).join('');
+    if (cur && [...el.options].some(o=>o.value===cur)) el.value = cur;
+  });
+
+  const tdw = document.getElementById('td-import-week');
+  if (tdw){
+    const cur = tdw.value;
+    const now = new Date();
+    const opts = [];
+    for (let i=0;i<12;i++){ const d=new Date(now); d.setDate(now.getDate()-i*7); opts.push(getISOWeekLabel(d)); }
+    const merged = [...new Set([...opts, ...all])].sort().reverse();
+    tdw.innerHTML = merged.map(w=>`<option value="${w}">${w}</option>`).join('');
+    const lastWeek = (()=>{ const d=new Date(now); d.setDate(now.getDate()-7); return getISOWeekLabel(d); })();
+    tdw.value = (cur && merged.includes(cur)) ? cur : lastWeek;
+  }
+}
+
+// ── PAGE NAVIGATION ───────────────────────────────────────────────────────────
+function switchPage(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page)?.classList.add('active');
+  document.getElementById('nav-'+page)?.classList.add('active');
+  currentPage = page;
+  renderCurrentPage();
+}
+
+function renderCurrentPage() {
+  if (currentPage==='overview') renderOverview();
+  else if (currentPage==='by-market') renderByMarket();
+  else if (currentPage==='by-game') renderByGame();
+  else if (currentPage==='all-listings') renderAllListings();
+  else if (currentPage==='trade-dress') renderTradeDress();
+  else if (currentPage==='weekly-report') renderReportPreview();
+}
+
+// ── CHART HELPER ──────────────────────────────────────────────────────────────
+function mkChart(id, type, labels, datasets, opts={}) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  const el = document.getElementById(id); if (!el) return;
+  const isSingle = !datasets[0]?.label;
+  charts[id] = new Chart(el, {
+    type, data: { labels,
+      datasets: isSingle
+        ? [{data:datasets, backgroundColor:opts.colors||[], borderRadius:type==='bar'?3:0, borderWidth:type==='doughnut'?1:0, borderSkipped:false}]
+        : datasets
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend: opts.legend ? {display:true, position:'bottom', labels:{color:'#8a8a9e', font:{size:10}, boxWidth:10, boxHeight:10, padding:10}} : {display:false},
+        tooltip:{callbacks:type==='line'?{title:i=>i[0].label}:{}}
+      },
+      scales: type!=='doughnut' ? {
+        x:{stacked:!!opts.stacked,grid:{display:false},ticks:{color:'#5a5a6e',font:{size:10},maxRotation:45,autoSkip:true}},
+        y:{stacked:!!opts.stacked,grid:{color:'#1e1e24'},ticks:{color:'#5a5a6e',font:{size:10},stepSize:1}}
+      } : {}
+    }
+  });
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────────────────────────
+function renderOverview() {
+  const week = document.getElementById('overview-week')?.value || 'all';
+  let data = week==='all' ? allListings : allListings.filter(l=>l.week_label===week);
+
+  const active = allListings.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+  const isFiltered = week !== 'all';
+  document.getElementById('overview-metrics').innerHTML = [
+    {label:'Total logged',val:allListings.length,color:'var(--text)'},
+    {label:'Active',val:active.length,color:'var(--accent)'},
+    {label:isFiltered?`Removed W${week.split('-W')[1]}`:'Removed all-time',val:isFiltered?allListings.filter(l=>l.date_removed&&getISOWeekLabel(new Date(l.date_removed))===week).length:allListings.filter(l=>l.status==='Removed').length,color:'var(--removed)'},
+    {label:isFiltered?`New W${week.split('-W')[1]}`:'This week',val:data.length,color:'var(--reported)'},
+  ].map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-val" style="color:${m.color}">${m.val}</div></div>`).join('');
+
+
+  const weekSet = new Set(allListings.map(l=>l.week_label).filter(Boolean));
+  weekSet.add(getISOWeekLabel(new Date()));
+  const weeks = [...weekSet].sort();
+  mkChart('c-new-over-time','line',weeks,[{
+    label:'New', data:weeks.map(w=>allListings.filter(l=>l.week_label===w).length),
+    borderColor:'#6c63f5',backgroundColor:'rgba(108,99,245,0.12)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#6c63f5'
+  }]);
+  mkChart('c-removals-over-time','line',weeks,[{
+    label:'Removed', data:weeks.map(w=>allListings.filter(l=>l.date_removed&&getISOWeekLabel(new Date(l.date_removed))===w).length),
+    borderColor:'#4ecb8d',backgroundColor:'rgba(78,203,141,0.12)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#4ecb8d'
+  }]);
+  const allActive = allListings.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+  mkChart('c-by-market','bar',MARKETS,MARKETS.map(m=>allActive.filter(l=>l.market===m).length),{colors:M_COLORS});
+  mkChart('c-status','doughnut',GAMES,GAMES.map(g=>data.filter(l=>l.game===g).length),{colors:G_COLORS});
+
+  const TD_CHART_COLORS = {'Pending':'#e0a52e','Taken down':'#4ecb8d','Accepted, still live':'#3fb8a8','Rejected':'#e05252'};
+  const tdScope = week==='all' ? tradeDress : tradeDress.filter(c=>c.week_label===week);
+  mkChart('c-td-outcomes','doughnut',TD_OUTCOMES,
+    TD_OUTCOMES.map(o=>tdScope.filter(c=>(c.abr_outcome||'Pending')===o).length),
+    {colors:TD_OUTCOMES.map(o=>TD_CHART_COLORS[o])});
+
+  const tdWeekSet = new Set(tradeDress.map(c=>c.week_label).filter(Boolean));
+  tdWeekSet.add(getISOWeekLabel(new Date()));
+  const tdWeeks = [...tdWeekSet].sort();
+  mkChart('c-td-over-time','bar',tdWeeks,
+    TD_OUTCOMES.map(o=>({
+      label:o,
+      data:tdWeeks.map(w=>tradeDress.filter(c=>c.week_label===w && (c.abr_outcome||'Pending')===o).length),
+      backgroundColor:TD_CHART_COLORS[o], borderRadius:3, borderSkipped:false, stack:'td'
+    })),
+    {stacked:true, legend:true});
+}
+
+// ── BY MARKETPLACE ────────────────────────────────────────────────────────────
+let marketStatusFilter = 'all';
+
+function renderByMarket() {
+  const mkt = currentMarket;
+  let data = mkt==='all' ? allListings : allListings.filter(l=>l.market===mkt);
+  if (marketStatusFilter==='available') data = data.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+
+  document.getElementById('market-pills').innerHTML =
+    `<div class="filter-group" style="margin-bottom:8px"><span class="filter-label">Marketplace</span>` +
+    `<button class="filter-pill ${mkt==='all'?'active':''}" onclick="setMarket('all')">All (${allListings.length})</button>` +
+    MARKETS.map(m=>`<button class="filter-pill ${mkt===m?'active':''}" onclick="setMarket('${m.replace(/'/g,"\\'")}')">${m.replace('Amazon ','AMZ ')} (${allListings.filter(l=>l.market===m).length})</button>`).join('') +
+    `</div>` +
+    `<div class="filter-group"><span class="filter-label">Status</span>` +
+    `<button class="filter-pill ${marketStatusFilter==='all'?'active':''}" onclick="setMarketStatusFilter('all')">All</button>` +
+    `<button class="filter-pill ${marketStatusFilter==='available'?'active':''}" onclick="setMarketStatusFilter('available')">Available</button>` +
+    `</div>`;
+
+  const active = data.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+  document.getElementById('market-metrics').innerHTML = [
+    {label:'Total',val:data.length},{label:'Active',val:active.length},
+    {label:'Removed',val:data.filter(l=>l.status==='Removed').length},
+    {label:'Reported',val:data.filter(l=>l.status==='Reported').length},
+  ].map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-val">${m.val}</div></div>`).join('');
+
+  document.getElementById('market-count').textContent = `${data.length} listings`;
+  const tbody = document.getElementById('market-tbody');
+  const empty = document.getElementById('market-empty');
+  if (!data.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = [...data].sort((a,b)=>new Date(b.date_added||0)-new Date(a.date_added||0)).map(tableRow).join('');
+}
+function setMarket(m) { currentMarket=m; renderByMarket(); }
+function setMarketStatusFilter(s) { marketStatusFilter=s; renderByMarket(); }
+
+
+// ── BY GAME ───────────────────────────────────────────────────────────────────
+function renderByGame() {
+  const g = currentGame;
+  const data = g==='all' ? allListings : allListings.filter(l=>l.game===g);
+
+  document.getElementById('game-pills').innerHTML =
+    `<button class="filter-pill ${g==='all'?'active':''}" onclick="setGame('all')">All games</button>` +
+    GAMES.map(gm=>`<button class="filter-pill ${g===gm?'active':''}" onclick="setGame('${gm.replace(/'/g,"\\'")}')">${gm} (${allListings.filter(l=>l.game===gm).length})</button>`).join('');
+
+  document.getElementById('game-metrics').innerHTML = [
+    {label:'Total',val:data.length},{label:'Active',val:data.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable').length},
+    {label:'Removed',val:data.filter(l=>l.status==='Removed').length},
+  ].map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-val">${m.val}</div></div>`).join('');
+
+  mkChart('c-game-market','bar',MARKETS,MARKETS.map(m=>data.filter(l=>l.market===m).length),{colors:M_COLORS});
+  mkChart('c-game-status','doughnut',STATUSES,STATUSES.map(s=>data.filter(l=>l.status===s).length),{colors:STATUSES.map(s=>S_COLOR[s])});
+
+  const tbody = document.getElementById('game-tbody');
+  const empty = document.getElementById('game-empty');
+  if (!data.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = [...data].sort((a,b)=>new Date(b.date_added||0)-new Date(a.date_added||0)).map(l=>tableRow(l,true)).join('');
+}
+function setGame(g) { currentGame=g; renderByGame(); }
+
+// ── ALL LISTINGS ──────────────────────────────────────────────────────────────
+function renderAllListings() {
+  const week = document.getElementById('all-week-filter')?.value || 'all';
+  let data = week==='all' ? allListings : allListings.filter(l=>l.week_label===week);
+  if (currentStatus==='active') data = data.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+  else if (currentStatus!=='all') data = data.filter(l=>l.status===currentStatus);
+
+  const activeCount = allListings.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable').length;
+  document.getElementById('all-status-filter').innerHTML =
+    `<div class="filter-group"><span class="filter-label">Status</span>` +
+    `<button class="filter-pill ${currentStatus==='all'?'active':''}" data-sa="all">All</button>` +
+    `<button class="filter-pill ${currentStatus==='active'?'active':''}" data-sa="active">All active (${activeCount})</button>` +
+    STATUSES.map(s=>`<button class="filter-pill ${currentStatus===s?'active':''}" data-sa="${s}">${s} (${allListings.filter(l=>l.status===s).length})</button>`).join('') +
+    `</div>`;
+
+  document.getElementById('all-status-filter').querySelectorAll('[data-sa]').forEach(btn => {
+    btn.addEventListener('click', () => { currentStatus=btn.dataset.sa; renderAllListings(); });
+  });
+
+  document.getElementById('all-count').textContent = `${data.length} listings`;
+  const tbody = document.getElementById('all-tbody');
+  const empty = document.getElementById('all-empty');
+  if (!data.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = [...data].sort((a,b)=>new Date(b.date_added||0)-new Date(a.date_added||0)).map(l=>tableRow(l,false,true)).join('');
+}
+
+// ── TABLE ROW HELPERS ─────────────────────────────────────────────────────────
+function buildFallbackUrl(l) {
+  if (l.url && l.url.trim()) return l.url;
+  const r=l.ref, m=l.market;
+  if (!r) return '';
+  if (m==='Amazon US') return `https://www.amazon.com/dp/${r}`;
+  if (m==='Amazon UK') return `https://www.amazon.co.uk/dp/${r}`;
+  if (m==='Amazon EU') return `https://www.amazon.de/dp/${r}`;
+  if (m==='Amazon Canada') return `https://www.amazon.ca/dp/${r}`;
+  if (m==='Amazon Australia') return `https://www.amazon.com.au/dp/${r}`;
+  if (m==='eBay') return `https://www.ebay.co.uk/itm/${r}`;
+  if (m==='Walmart') return `https://www.walmart.com/ip/${r}`;
+  if (m==='AliExpress') return `https://www.aliexpress.com/item/${r}.html`;
+  return '';
+}
+
+function refCell(l) {
+  const url = buildFallbackUrl(l);
+  // TikTok: show plain copyable URL
+  if (l.market==='TikTok Shop' && url) {
+    return `<span class="mono" style="font-size:10px;color:var(--muted2);user-select:all">${url}</span>`;
+  }
+  const link = url ? `<a href="${url}" target="_blank" style="color:var(--accent2);text-decoration:none">${l.ref}</a>` : l.ref;
+  return `<span class="mono">${link}</span>`;
+}
+
+function badge(s) { return `<span class="badge ${S_CLASS[s]||'b-todo'}">${s}</span>`; }
+
+function statusSelect(l) {
+  return `<select class="inline-select" style="padding:3px 6px;font-size:11px" onchange="updateField(${l.id},'status',this.value)">
+    ${STATUSES.map(s=>`<option value="${s}" ${s===l.status?'selected':''}>${s}</option>`).join('')}
+  </select>`;
+}
+
+function editCell(l, field) {
+  const val = l[field] || '';
+  return `<div class="edit-cell" onclick="startEditText(this,${l.id},'${field}')"><span>${val||'<span style="color:var(--muted)">—</span>'}</span><span class="edit-icon">✎</span></div>`;
+}
+
+const LISTING_RESOLVED = ['Removed','Rejected','Unavailable'];
+const LISTING_STALE_DAYS = 14;
+function uploadedCell(l){
+  const d = l.date_added ? new Date(l.date_added) : null;
+  if (!d || isNaN(d)) return `<span style="color:var(--muted);font-size:11px">—</span>`;
+  const stale = !LISTING_RESOLVED.includes(l.status) && (Date.now() - d.getTime())/DAY_MS > LISTING_STALE_DAYS;
+  return `<span class="mono" style="font-size:11px;color:${stale?'var(--rejected)':'var(--muted2)'}" title="${stale?'Added over two weeks ago and still unresolved':'Date added to the tracker'}">`+
+    (stale?'<span class="td-slow">!</span> ':'')+tdFmtDate(d)+`</span>`;
+}
+function tableRow(l, showMarket=false, showBoth=false) {
+  const tail = `<td>${statusSelect(l)}</td><td>${uploadedCell(l)}</td><td><span class="week-badge">${l.week_label||''}</span></td><td>${editCell(l,'notes')}</td><td><button class="del-btn" onclick="del(${l.id})">×</button></td>`;
+  const cols = showBoth
+    ? `<td>${refCell(l)}</td><td>${l.game||''}</td><td style="color:var(--muted2)">${l.market||''}</td><td>${editCell(l,'type')}</td>${tail}`
+    : showMarket
+    ? `<td>${refCell(l)}</td><td style="color:var(--muted2)">${l.market||''}</td><td>${editCell(l,'type')}</td>${tail}`
+    : `<td>${refCell(l)}</td><td style="color:var(--muted2)">${l.game||''}</td><td>${editCell(l,'type')}</td>${tail}`;
+  return `<tr>${cols}</tr>`;
+}
+
+// ── INLINE EDIT ───────────────────────────────────────────────────────────────
+async function updateField(id, field, value) {
+  const listing = allListings.find(l=>l.id===id);
+  if (!listing) return;
+  const old = listing[field];
+  listing[field] = value;
+  setSyncing(true);
+  try {
+    await sbFetch(`listings?id=eq.${id}`, {method:'PATCH', prefer:'return=minimal', body:JSON.stringify({[field]:value})});
+    setSyncing(false);
+  } catch(e) { listing[field]=old; setError(); alert('Error saving: '+e.message); }
+}
+
+function startEditText(cell, id, field) {
+  const current = allListings.find(l=>l.id===id)?.[field] || '';
+  const input = document.createElement('input');
+  input.type='text'; input.value=current;
+  input.style.cssText='width:100%;background:var(--surface2);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:3px 6px;outline:none;';
+  cell.innerHTML=''; cell.appendChild(input); input.focus(); input.select();
+  input.addEventListener('blur', ()=>updateField(id,field,input.value));
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') input.blur(); if(e.key==='Escape') renderCurrentPage(); });
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+async function del(id) {
+  if (!confirm('Delete this listing?')) return;
+  try {
+    await sbFetch(`listings?id=eq.${id}`, {method:'DELETE', prefer:'return=minimal'});
+    allListings = allListings.filter(l=>l.id!==id);
+    renderCurrentPage();
+  } catch(e) { alert('Error deleting: '+e.message); }
+}
+
+// ── URL EXTRACTION ────────────────────────────────────────────────────────────
+const AMZ_DOMAINS = {'amazon.com/':'Amazon US','amazon.co.uk':'Amazon UK','amazon.de':'Amazon EU','amazon.fr':'Amazon EU','amazon.es':'Amazon EU','amazon.it':'Amazon EU','amazon.ca':'Amazon Canada','amazon.com.au':'Amazon Australia'};
+const EXTRACTORS = {
+  'Amazon US': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon UK': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon EU': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon Canada': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'Amazon Australia': u=>{const m=u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);return m?{ref:m[1],label:'ASIN'}:null;},
+  'eBay': u=>{const m=u.match(/\/itm\/(?:[^/?]+[^0-9])?(\d{10,13})/)||u.match(/\/itm\/(\d{10,13})/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'Walmart': u=>{const m=u.match(/\/ip\/(?:[^/]+\/)?(\d+)/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'TikTok Shop': u=>{
+    const vm=u.match(/(?:vm|vt)\.tiktok\.com\/([A-Za-z0-9_-]+)/);
+    if(vm) return {ref:'TT-'+vm[1],label:'TikTok short link'};
+    const t=u.match(/tiktok\.com\/t\/([A-Za-z0-9_-]+)/);
+    if(t) return {ref:'TT-'+t[1],label:'TikTok short link'};
+    const m=u.match(/\/view\/product\/(\d+)/)||u.match(/\/product\/(\d+)/)||u.match(/item_id=(\d+)/)||u.match(/[?&]id=(\d+)/)||u.match(/\/(\d{15,})/);
+    return m?{ref:m[1],label:'Product ID'}:null;
+  },
+  'AliExpress': u=>{const m=u.match(/\/item\/(\d+)/);return m?{ref:m[1],label:'Item ID'}:null;},
+  'Alibaba': u=>{const m=u.match(/\/product-detail\/[^/?]+[_-](\d{10,})\.html/)||u.match(/\/offer\/(\d{10,})/)||u.match(/[?&]id=(\d{8,})/)||u.match(/_(\d{10,})\.html/);return m?{ref:m[1],label:'Product ID'}:null;},
+  'Shein': u=>{const m=u.match(/-p-([a-zA-Z0-9]{6,})(?:\.html|[^a-zA-Z0-9]|$)/);return m?{ref:m[1],label:'Product ID'}:null;},
+  'Temu': u=>{const m=u.match(/goods[_-](\d+)/)||u.match(/g-(\d{10,})\.html/)||u.match(/-(\d{12,})\.html/);return m?{ref:m[1],label:'Goods ID'}:null;},
+  'Fruugo': u=>{const m=u.match(/\/p-(\d{5,}-\d{5,})/)||u.match(/\/p-(\d{8,})/);return m?{ref:m[1],label:'Product ID'}:null;},
+  'OnBuy': u=>{const m=u.match(/~p(\d+)/)||u.match(/\/p-(\d+)/);return m?{ref:'OB-'+m[1],label:'Product ID'}:null;},
+  'Wowcher': u=>{const m=u.match(/\/deal\/[^?]+\/(\d+)\//)||u.match(/\/(\d{7,})/);return m?{ref:m[1],label:'Deal ID'}:null;},
+  'Groupon': u=>{const m=u.match(/\/deals\/([a-z0-9-]+)/);return m?{ref:m[1],label:'Deal slug'}:null;},
+  'Argos': u=>{const m=u.match(/\/product\/(\d+)/);return m?{ref:m[1],label:'Product ID'}:null;},
+};
+
+function autoMarket(url) {
+  for(const [d,n] of Object.entries(AMZ_DOMAINS)) if(url.includes(d)) return n;
+  if(url.includes('ebay.')) return 'eBay';
+  if(url.includes('walmart.')) return 'Walmart';
+  if(url.includes('tiktok.com')) return 'TikTok Shop';
+  if(url.includes('aliexpress.com')) return 'AliExpress';
+  if(url.includes('alibaba.com')) return 'Alibaba';
+  if(url.includes('shein.')) return 'Shein';
+  if(url.includes('temu.com')) return 'Temu';
+  if(url.includes('fruugo.')) return 'Fruugo';
+  if(url.includes('onbuy.com')) return 'OnBuy';
+  if(url.includes('wowcher.co.uk')) return 'Wowcher';
+  if(url.includes('groupon.co.uk')||url.includes('groupon.com')) return 'Groupon';
+  if(url.includes('argos.co.uk')) return 'Argos';
+  return null;
+}
+
+function handleUrl() {
+  const url = document.getElementById('inp-url').value.trim();
+  const hint = document.getElementById('ref-hint');
+  if (!url) { hint.style.display='none'; return; }
+  const det = autoMarket(url);
+  if (det) document.getElementById('inp-market').value = det;
+  const mkt = document.getElementById('inp-market').value;
+  const ex = EXTRACTORS[mkt];
+  if (!ex) { hint.style.display='none'; return; }
+  const r = ex(url);
+  if (r && r.ref) {
+    document.getElementById('inp-ref').value = r.ref;
+    hint.textContent = r.label + ': ' + r.ref;
+    hint.style.color = 'var(--accent2)';
+    hint.style.display = 'block';
+  } else {
+    document.getElementById('inp-ref').value = '';
+    hint.textContent = '⚠ Could not extract ref — check marketplace is correct';
+    hint.style.color = 'var(--rejected)';
+    hint.style.display = 'block';
+  }
+}
+
+// ── ADD LISTING ───────────────────────────────────────────────────────────────
+async function addListing() {
+  const ref = document.getElementById('inp-ref').value.trim();
+  const rawUrl = document.getElementById('inp-url').value.trim();
+  let url = rawUrl;
+  try { const u=new URL(rawUrl); url=u.origin+u.pathname.replace(/\/$/,''); } catch(e){}
+  const msg = document.getElementById('add-msg');
+
+  if (!ref) {
+    msg.textContent = '✕ Could not extract a reference number from this URL. Check the marketplace and URL.';
+    msg.style.color = 'var(--rejected)'; msg.style.display = 'block'; return;
+  }
+
+  const typeVal = [...document.querySelectorAll('#inp-type-wrap input:checked')].map(c=>c.value).join(', ') || '';
+  const statusVal = typeVal==='None' ? 'Blocked' : document.getElementById('inp-status').value;
+  const btn = document.getElementById('add-btn');
+  btn.disabled=true; btn.textContent='Adding...'; msg.style.display='none';
+  const today = new Date();
+
+  try {
+    const payload = {
+      ref, url,
+      market: document.getElementById('inp-market').value,
+      game: document.getElementById('inp-game').value,
+      status: statusVal,
+      type: typeVal,
+      notes: '',
+      date_added: today.toISOString().split('T')[0],
+      week_label: getISOWeekLabel(today)
+    };
+    const result = await sbFetch('listings', {method:'POST', prefer:'return=representation', body:JSON.stringify(payload)});
+    allListings.unshift(Array.isArray(result)?result[0]:{...payload,id:Date.now()});
+    populateWeekSelectors();
+    document.getElementById('inp-url').value='';
+    document.getElementById('inp-ref').value='';
+    document.getElementById('ref-hint').style.display='none';
+    document.querySelectorAll('#inp-type-wrap input').forEach(i=>i.checked=false);
+    msg.textContent='✓ Listing added'; msg.style.color='var(--accent2)'; msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',3000);
+  } catch(e) {
+    const txt = e.message || '';
+    if (txt.includes('unique')||txt.includes('duplicate')||txt.includes('23505')) {
+      msg.textContent='⚠ This listing already exists for this marketplace'; msg.style.color='var(--reported)';
+    } else {
+      msg.textContent='✕ Error: '+txt.substring(0,200); msg.style.color='var(--rejected)';
+    }
+    msg.style.display='block';
+  }
+  btn.disabled=false; btn.textContent='+ Add listing';
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+function simplifyUrl(url) {
+  try { const u=new URL(url); return u.origin+u.pathname.replace(/\/$/,''); } catch(e) { return url; }
+}
+function mapType(type) {
+  if (!type) return 'Trademark';
+  const t = type.toLowerCase();
+  if (t==='all') return 'Trademark,Copyright Infringement';
+  if (t.includes('copyright')||t.includes('trade dress')) return 'Copyright Infringement';
+  return 'Trademark';
+}
+
+function exportURLs(mkt, weekFilter) {
+  let data = mkt==='all' ? allListings : allListings.filter(l=>l.market===mkt);
+  if (weekFilter && weekFilter!=='all') data = data.filter(l=>l.week_label===weekFilter);
+  const withURLs = data.filter(l=>l.url&&l.url.trim()!==''&&l.status!=='Removed'&&l.status!=='Unavailable'&&l.type!=='None');
+  if (!withURLs.length) { alert('No listings to export for this selection.'); return; }
+
+  const confirmed = confirm(`Download ${withURLs.length} URLs?`);
+  if (!confirmed) return;
+
+  const rows = [['url','label','tags']];
+  withURLs.forEach(l=>rows.push([simplifyUrl(l.url),mapType(l.type),'client request']));
+
+  function writeXLSX() {
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'URLs');
+    const weekSuffix=weekFilter&&weekFilter!=='all'?`-${weekFilter}`:'';
+    XLSX.writeFile(wb,`ip-urls-${mkt==='all'?'all':mkt.replace(/ /g,'-').toLowerCase()}${weekSuffix}.xlsx`);
+  }
+  if (window.XLSX) { writeXLSX(); }
+  else {
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=writeXLSX; document.head.appendChild(s);
+  }
+}
+
+function exportCSV(mkt) {
+  const data = mkt==='all' ? allListings : allListings.filter(l=>l.market===mkt);
+  const rows = [['Reference','Game','Marketplace','Type','Status','Week','Notes','URL','Date Added']];
+  data.forEach(l=>rows.push([l.ref,l.game,l.market,l.type,l.status,l.week_label,l.notes,l.url,l.date_added]));
+  const csv = rows.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`ip-tracker-${mkt==='all'?'all':mkt.replace(/ /g,'-').toLowerCase()}.csv`;
+  a.click();
+}
+
+// ── REVIEW LISTINGS ───────────────────────────────────────────────────────────
+let checkCancelled = false;
+let reviewResolve = null;
+
+function cancelCheck() {
+  checkCancelled=true;
+  if (reviewResolve) reviewResolve('skip');
+  document.getElementById('check-progress').classList.remove('visible');
+  const btn=document.getElementById('check-btn');
+  btn.disabled=false; btn.textContent='🔍 Review listings';
+}
+
+async function checkURLs() {
+  const btn=document.getElementById('check-btn');
+  const progress=document.getElementById('check-progress');
+  const statusEl=document.getElementById('check-status');
+  const barEl=document.getElementById('check-bar');
+  const detailEl=document.getElementById('check-detail');
+  const reviewActions=document.getElementById('review-actions');
+  const reviewRef=document.getElementById('review-ref');
+
+  const toCheck = allListings.filter(l=>l.url&&l.url.trim()!==''&&l.status!=='Removed'&&l.status!=='Unavailable'&&l.market!=='Fruugo');
+  if (!toCheck.length) { alert('No listings with URLs to review.'); return; }
+
+  checkCancelled=false;
+  btn.disabled=true; btn.textContent='Reviewing...';
+  progress.classList.add('visible');
+  barEl.style.width='0%'; reviewActions.style.display='none';
+
+  document.getElementById('btn-mark-removed').onclick=()=>{if(reviewResolve)reviewResolve('removed');};
+  document.getElementById('btn-still-live').onclick=()=>{if(reviewResolve)reviewResolve('live');};
+  document.getElementById('btn-skip').onclick=()=>{if(reviewResolve)reviewResolve('skip');};
+
+  let reviewed=0, removed=0;
+  for (const listing of toCheck) {
+    if (checkCancelled) break;
+    reviewed++;
+    barEl.style.width=`${Math.round((reviewed/toCheck.length)*100)}%`;
+    statusEl.textContent=`${reviewed} of ${toCheck.length} — ${removed} marked removed`;
+    detailEl.textContent=`${listing.market} · ${listing.game}`;
+    reviewRef.textContent=listing.ref;
+    reviewActions.style.display='flex';
+    window.open(listing.url,'_blank');
+    const decision = await new Promise(resolve=>{reviewResolve=resolve;});
+    reviewResolve=null;
+    if (decision==='removed') { await updateField(listing.id,'status','Removed'); removed++; }
+    if (checkCancelled) break;
+  }
+  reviewActions.style.display='none';
+  barEl.style.width='100%';
+  statusEl.textContent=`Done — ${removed} marked removed, ${reviewed-removed} still live`;
+  detailEl.textContent='';
+  btn.disabled=false; btn.textContent='🔍 Review listings';
+  if (removed>0) renderCurrentPage();
+  setTimeout(()=>progress.classList.remove('visible'),8000);
+}
+
+// ── WEEKLY REPORT PDF ─────────────────────────────────────────────────────────
+function generateWeeklyReport() {
+  const {jsPDF} = window.jspdf;
+  if (!jsPDF) { alert('PDF library not loaded. Try again in a moment.'); return; }
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const week = document.getElementById('report-week-picker')?.value || getISOWeekLabel(new Date());
+  const now = new Date();
+  const W=210, margin=14, col=W-margin*2;
+  const BRAND=[108,99,245], WHITE=[255,255,255], DARK=[20,20,26], MUTED=[90,90,110], LIGHT=[245,245,250];
+  let y=0;
+
+  const weekData = allListings.filter(l=>l.week_label===week);
+  const allActive = allListings.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+
+  // Header
+  doc.setFillColor(...BRAND); doc.rect(0,0,W,26,'F');
+  doc.setTextColor(...WHITE); doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Lucky Egg — Marketplace Cleanliness Report',margin,11);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Week: ${week}   |   Generated: ${now.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'})}`,margin,19);
+  y=33;
+
+  // Metrics
+  doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(...DARK);
+  doc.text('Summary',margin,y); y+=5;
+  const metrics=[
+    {l:'Total active',v:allActive.length},{l:'New this week',v:weekData.length},
+    {l:'Removed all-time',v:allListings.filter(l=>l.status==='Removed').length},
+    {l:'Marketplaces affected',v:new Set(allActive.map(l=>l.market)).size},
+  ];
+  const bw=(col-6)/4;
+  metrics.forEach((m,i)=>{
+    const x=margin+i*(bw+2);
+    doc.setFillColor(...LIGHT); doc.roundedRect(x,y,bw,16,2,2,'F');
+    doc.setFontSize(16); doc.setFont('helvetica','bold'); doc.setTextColor(...BRAND);
+    doc.text(String(m.v),x+bw/2,y+9,{align:'center'});
+    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MUTED);
+    doc.text(m.l,x+bw/2,y+14,{align:'center'});
+  }); y+=22;
+
+  // New listings table
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...DARK);
+  doc.text(`New Listings — ${week}`,margin,y); y+=4;
+  if (weekData.length) {
+    doc.autoTable({
+      startY:y, head:[['Ref','Game','Marketplace','Type','Status']],
+      body:weekData.map(l=>[l.ref,l.game,l.market,l.type||'—',l.status]),
+      headStyles:{fillColor:BRAND,textColor:WHITE,fontStyle:'bold',fontSize:8},
+      bodyStyles:{fontSize:8,textColor:DARK},
+      alternateRowStyles:{fillColor:LIGHT},
+      columnStyles:{0:{cellWidth:35},1:{cellWidth:32},2:{cellWidth:32},3:{cellWidth:32}},
+      margin:{left:margin,right:margin},theme:'plain',
+    }); y=doc.lastAutoTable.finalY+8;
+  } else {
+    doc.setFontSize(9); doc.setFont('helvetica','italic'); doc.setTextColor(...MUTED);
+    doc.text('No new listings this week.',margin,y+4); y+=12;
+  }
+
+  // By marketplace
+  if (y>240) { doc.addPage(); y=20; }
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(...DARK);
+  doc.text('Total Active by Marketplace',margin,y); y+=4;
+  doc.autoTable({
+    startY:y, head:[['Marketplace','Active','Grab the Mic','Snort Funny','Misheard Music','Sorry What?!']],
+    body:MARKETS.map(m=>{
+      const d=allActive.filter(l=>l.market===m); if(!d.length) return null;
+      return [m,d.length,d.filter(l=>l.game==='Grab the Mic').length,d.filter(l=>l.game==='Snort Funny').length,d.filter(l=>l.game==='Misheard Music').length,d.filter(l=>l.game==="Sorry What?!").length];
+    }).filter(Boolean),
+    headStyles:{fillColor:BRAND,textColor:WHITE,fontStyle:'bold',fontSize:8},
+    bodyStyles:{fontSize:8,textColor:DARK,halign:'center'},
+    alternateRowStyles:{fillColor:LIGHT},
+    columnStyles:{0:{halign:'left',cellWidth:38}},
+    margin:{left:margin,right:margin},theme:'plain',
+  });
+
+  // Footer
+  const pageCount=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pageCount;i++){
+    doc.setPage(i); doc.setFontSize(7); doc.setTextColor(...MUTED);
+    doc.text(`Lucky Egg — Confidential   |   Page ${i} of ${pageCount}`,W/2,289,{align:'center'});
+  }
+  doc.save(`Lucky-Egg-IP-Report-${week}.pdf`);
+}
+
+// ── SEND TO SLACK ─────────────────────────────────────────────────────────────
+const TRACKER_URL = 'https://ip-tracker-gamma-rouge.vercel.app';
+
+function isoWeekToMonday(year, wk){
+  const jan4 = new Date(year, 0, 4, 12, 0, 0);
+  const jan4Dow = jan4.getDay() || 7;
+  const mondayW1 = new Date(jan4); mondayW1.setDate(jan4.getDate() - (jan4Dow - 1));
+  const monday = new Date(mondayW1); monday.setDate(mondayW1.getDate() + (wk - 1) * 7);
+  return monday;
+}
+function prevWeekLabel(week){
+  const m = (week||'').match(/(\d{4})-W(\d{1,2})/); if (!m) return null;
+  const monday = isoWeekToMonday(+m[1], +m[2]); monday.setDate(monday.getDate() - 7);
+  return getISOWeekLabel(monday);
+}
+
+function buildReportData(week){
+  const weekData = allListings.filter(l=>l.week_label===week);
+  const allActive = allListings.filter(l=>l.status!=='Removed'&&l.status!=='Unavailable');
+  const removed = allListings.filter(l=>l.date_removed&&getISOWeekLabel(new Date(l.date_removed))===week);
+  const tdWeek = tradeDress.filter(c=>c.week_label===week);
+  const tdN = o => tdWeek.filter(c=>(c.abr_outcome||'Pending')===o).length;
+
+  const byMarket = arr => { const m={}; arr.forEach(l=>{ if(l.market) m[l.market]=(m[l.market]||0)+1; }); return Object.entries(m).map(([market,n])=>({market,n})).sort((a,b)=>b.n-a.n); };
+  const byGame = GAMES.map(g=>{
+    const gActive = allActive.filter(l=>l.game===g);
+    const top = byMarket(gActive)[0];
+    return { game:g, active:gActive.length, added:weekData.filter(l=>l.game===g).length, removed:removed.filter(l=>l.game===g).length, topMarket: top?top.market:'—', topN: top?top.n:0 };
+  });
+
+  const lastWk = prevWeekLabel(week);
+  const lastWeekNew = lastWk ? allListings.filter(l=>l.week_label===lastWk).length : 0;
+
+  return {
+    week, weekData, removed, tdWeek,
+    active: allActive.length,
+    marketplaces: new Set(allActive.map(l=>l.market)).size,
+    newN: weekData.length, remN: removed.length,
+    net: weekData.length - removed.length,
+    vsLast: weekData.length - lastWeekNew,
+    topNew: byMarket(weekData).slice(0,3),
+    topRem: byMarket(removed).slice(0,3),
+    byGame,
+    tdBreak: {'Pending':tdN('Pending'),'Taken down':tdN('Taken down'),'Rejected':tdN('Rejected')},
+    tdTotal: tradeDress.length,
+    tdLegal: tradeDress.filter(c=>c.court_outcome).length
+  };
+}
+
+function reportNiceDate(){ return new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); }
+function reportSign(n){ return (n>=0?'+':'')+n; }
+
+function renderReportPreview(){
+  const el = document.getElementById('report-preview');
+  if (!el) return;
+  const week = document.getElementById('report-week-picker')?.value || getISOWeekLabel(new Date());
+  const r = buildReportData(week);
+  const esc = s => (s==null?'':(''+s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const field = (label,val)=>`<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${label}</div><div style="font-size:13px;color:var(--text);margin-top:2px">${val}</div></div>`;
+  const head = (e,t)=>`<div style="font-weight:600;font-size:13px;margin:16px 0 6px">${e} ${t}</div>`;
+  const div = `<div style="height:1px;background:var(--border);margin:14px 0"></div>`;
+
+  const topNew = r.topNew.length ? r.topNew.map(x=>`<div style="font-size:12px;padding:1px 0">${esc(x.market)}: <span style="color:var(--reported)">+${x.n}</span></div>`).join('') : `<div style="font-size:12px;color:var(--muted)">None this week</div>`;
+  const topRem = r.topRem.length ? r.topRem.map(x=>`<div style="font-size:12px;padding:1px 0">${esc(x.market)}: <span style="color:var(--removed)">${x.n} removed</span></div>`).join('') : `<div style="font-size:12px;color:var(--muted)">None this week</div>`;
+  const byGame = r.byGame.map(g=>`<div style="font-size:12px;padding:2px 0"><b>${esc(g.game)}</b> — ${g.active} active · ${g.added} new · ${g.removed} removed · Top: ${esc(g.topMarket)} (${g.topN})</div>`).join('');
+  const td = `<div style="font-size:12px">${r.tdWeek.length} added this week — Pending ${r.tdBreak['Pending']} · Taken down ${r.tdBreak['Taken down']} · Rejected ${r.tdBreak['Rejected']}</div>`+
+    `<div style="font-size:11px;color:var(--muted);margin-top:2px">Overall: ${r.tdTotal} tracked, ${r.tdLegal} at legal action</div>`;
+
+  el.innerHTML =
+    `<div class="card-title">Marketplace Cleanliness Report — ${esc(week)}</div>`+
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">${esc(reportNiceDate())}</div>`+
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">`+
+      field('Total Active', `${r.active} infringements`)+
+      field('Net Change This Week', `${reportSign(r.net)} (${r.newN} new, ${r.remN} removed)`)+
+      field('vs Last Week', `${reportSign(r.vsLast)} new listings`)+
+      field('Week', esc(week))+
+    `</div>`+
+    div+ head('🔴','Top New Infringements')+ topNew+
+    head('✅','Top Removals')+ topRem+
+    div+ head('💬','By Game')+ byGame+
+    div+ head('⚖️','Trade Dress')+ td;
+}
+
+async function sendToSlack() {
+  const msg = document.getElementById('report-msg');
+  const week = document.getElementById('report-week-picker')?.value || getISOWeekLabel(new Date());
+  msg.textContent='Sending...'; msg.style.color='var(--muted)'; msg.style.display='block';
+  try {
+    const r = buildReportData(week);
+    const topNewStr = r.topNew.length ? r.topNew.map(x=>`${x.market}: +${x.n}`).join('\n') : '_None this week_';
+    const topRemStr = r.topRem.length ? r.topRem.map(x=>`${x.market}: ${x.n} removed`).join('\n') : '_None this week_';
+    const byGameStr = r.byGame.map(g=>`*${g.game}* — ${g.active} active · ${g.added} new · ${g.removed} removed · Top: ${g.topMarket} (${g.topN})`).join('\n');
+    const tdStr = `${r.tdWeek.length} added this week — Pending ${r.tdBreak['Pending']} · Taken down ${r.tdBreak['Taken down']} · Rejected ${r.tdBreak['Rejected']}\nOverall: ${r.tdTotal} tracked, ${r.tdLegal} at legal action`;
+
+    const blocks = [
+      {type:'header', text:{type:'plain_text', text:`Marketplace Cleanliness Report — ${week}`, emoji:true}},
+      {type:'context', elements:[{type:'mrkdwn', text:reportNiceDate()}]},
+      {type:'section', fields:[
+        {type:'mrkdwn', text:`*Total Active*\n${r.active} infringements`},
+        {type:'mrkdwn', text:`*Net Change This Week*\n${reportSign(r.net)} (${r.newN} new, ${r.remN} removed)`},
+        {type:'mrkdwn', text:`*vs Last Week*\n${reportSign(r.vsLast)} new listings`},
+        {type:'mrkdwn', text:`*Week*\n${week}`}
+      ]},
+      {type:'divider'},
+      {type:'section', text:{type:'mrkdwn', text:`🔴 *Top New Infringements*\n${topNewStr}`}},
+      {type:'section', text:{type:'mrkdwn', text:`✅ *Top Removals*\n${topRemStr}`}},
+      {type:'divider'},
+      {type:'section', text:{type:'mrkdwn', text:`💬 *By Game*\n${byGameStr}`}},
+      {type:'divider'},
+      {type:'section', text:{type:'mrkdwn', text:`⚖️ *Trade Dress*\n${tdStr}`}},
+      {type:'actions', elements:[{type:'button', text:{type:'plain_text', text:'View Full Tracker', emoji:true}, url:TRACKER_URL}]}
+    ];
+    const text = `Marketplace Cleanliness Report — ${week}: ${reportSign(r.net)} net (${r.newN} new, ${r.remN} removed)`;
+
+    const testWebhook = (document.getElementById('report-test-webhook')?.value || '').trim();
+    const payload = {text, blocks};
+    if (testWebhook) payload.webhook = testWebhook;
+
+    const res = await fetch(SLACK_EDGE, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_KEY}`},
+      body:JSON.stringify(payload)
+    });
+    const out = await res.json().catch(()=>({}));
+    if (!res.ok || out.ok===false) throw new Error(out.error || out.response || ('HTTP '+res.status));
+    msg.textContent = testWebhook ? '✓ Sent to your test destination' : '✓ Sent to #ip-enforcement';
+    msg.style.color='var(--accent2)';
+  } catch(e) {
+    msg.textContent='✕ Error: '+e.message; msg.style.color='var(--rejected)';
+  }
+}
+
+
+// ── TRADE DRESS ───────────────────────────────────────────────────────────────
+function tdReached(c, stage){ return !!(c[TD_STAGE_FIELD[stage]]); }
+function tdCurrentStage(c){
+  if (c.court_outcome) return 'Court';
+  if (c.cd_outcome) return 'C&D';
+  return 'ABR';
+}
+function tdOutcomeOf(c, stage){ return c[TD_STAGE_FIELD[stage]] || null; }
+function tdCurrentOutcome(c){ return c[TD_STAGE_FIELD[tdCurrentStage(c)]] || 'Pending'; }
+
+// ── TRADE DRESS TIMING ────────────────────────────────────────────────────────
+const TD_RESOLVED = ['Taken down','Accepted, still live','Rejected'];
+const TD_FILED_FIELD = {'ABR':'abr_filed_at','C&D':'cd_filed_at','Court':'court_filed_at'};
+const TD_RESOLVED_FIELD = {'ABR':'abr_resolved_at','C&D':'cd_resolved_at','Court':'court_resolved_at'};
+const DAY_MS = 86400000;
+
+function tdEnteredAt(c){ const v = c.entered_at || c.date_added; return v ? new Date(v) : null; }
+function tdSpan(a, b){ if (!a || !b) return null; return (new Date(b) - new Date(a)) / DAY_MS; }
+// ABR runs from its recorded filing date (from the Corsearch sheet), falling back
+// to entry on the tracker. C&D and Legal Action run from when that stage was filed.
+function tdStartOf(c, stage){
+  if (stage==='ABR') return c.abr_filed_at ? new Date(c.abr_filed_at) : tdEnteredAt(c);
+  return c[TD_FILED_FIELD[stage]] ? new Date(c[TD_FILED_FIELD[stage]]) : null;
+}
+function tdDaysToDecide(c, stage='ABR'){ return tdSpan(tdStartOf(c, stage), c[TD_RESOLVED_FIELD[stage]]); }
+function tdAvg(nums){ const v = nums.filter(n=>n!==null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; }
+function tdFmtDays(d){
+  if (d===null || d===undefined) return '—';
+  const n = Math.round(d);
+  if (n < 1) return '<1 day';
+  return n===1 ? '1 day' : n+' days';
+}
+function tdTimingStats(stage='ABR'){
+  const decided = tradeDress.filter(c=>tdDaysToDecide(c,stage)!==null);
+  const out = f => tradeDress.filter(c=>c[TD_STAGE_FIELD[stage]]===f && tdDaysToDecide(c,stage)!==null);
+  const untimed = tradeDress.filter(c=>TD_RESOLVED.includes(c[TD_STAGE_FIELD[stage]]) && tdDaysToDecide(c,stage)===null);
+  return {
+    decidedN: decided.length,
+    avgDecide: tdAvg(decided.map(c=>tdDaysToDecide(c,stage))),
+    avgTakedown: tdAvg(out('Taken down').map(c=>tdDaysToDecide(c,stage))),
+    avgReject: tdAvg(out('Rejected').map(c=>tdDaysToDecide(c,stage))),
+    untimedN: untimed.length
+  };
+}
+
+async function loadTradeDress(){
+  try {
+    const data = await sbFetch('trade_dress_cases?select=*&order=date_added.desc,id.desc');
+    tradeDress = data || [];
+    populateWeekSelectors();
+    if (currentPage==='trade-dress') renderTradeDress();
+    else if (currentPage==='weekly-report') renderReportPreview();
+    else if (currentPage==='overview') renderOverview();
+  } catch(e){ console.error('trade dress load', e); }
+}
+
+function renderTradeDress(){
+  const funnel = document.getElementById('td-funnel');
+  funnel.innerHTML = TD_STAGES.map((stage,i)=>{
+    const inStage = tradeDress.filter(c=>tdReached(c,stage));
+    const rows = TD_OUTCOMES.map(o=>{
+      const n = inStage.filter(c=>tdOutcomeOf(c,stage)===o).length;
+      return `<div class="td-frow"><span class="td-box ${TD_BOX_CLASS[o]}" style="width:auto;padding:2px 8px;pointer-events:none">${o}</span><span class="td-fn">${n}</span></div>`;
+    }).join('');
+    const col = `<div class="td-fcol"><div class="td-fhead"><span>${TD_STAGE_LABEL[stage]}</span><span class="td-ftot">${inStage.length}</span></div>${rows}</div>`;
+    return col + (i<TD_STAGES.length-1 ? `<div class="td-farrow">&rarr;</div>` : '');
+  }).join('');
+
+  const cur = tradeDress.map(c=>({s:tdCurrentStage(c), o:tdCurrentOutcome(c)}));
+  const m = [
+    {label:'Total cases', val:tradeDress.length, color:'var(--text)'},
+    {label:'Taken down', val:cur.filter(x=>x.o==='Taken down').length, color:'var(--removed)'},
+    {label:'Rejected', val:cur.filter(x=>x.o==='Rejected').length, color:'var(--rejected)'},
+    {label:'Pending', val:cur.filter(x=>x.o==='Pending').length, color:'var(--reported)'},
+    {label:'At legal action', val:cur.filter(x=>x.s==='Court').length, color:'var(--unavailable)'}
+  ];
+  document.getElementById('td-metrics').innerHTML = m.map(x=>`<div class="metric"><div class="metric-label">${x.label}</div><div class="metric-val" style="color:${x.color}">${x.val}</div></div>`).join('');
+
+  const t = tdTimingStats(tdTimingStage);
+  const tEl = document.getElementById('td-timing');
+  if (tEl){
+    const stat = (label,val,color,hint)=>`<div title="${hint||''}"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${label}</div><div style="font-size:18px;font-family:var(--mono);color:${color};margin-top:3px">${val}</div></div>`;
+    const tabs = TD_STAGES.map(s=>`<button class="filter-pill ${tdTimingStage===s?'active':''}" data-tdt="${s}" style="font-size:10px;padding:3px 10px">${TD_STAGE_LABEL[s]}</button>`).join('');
+    tEl.innerHTML =
+      `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">`+
+        `<div class="card-title" style="margin:0">Response times</div><div style="display:flex;gap:6px">${tabs}</div>`+
+      `</div>`+
+      `<div style="display:flex;gap:28px;flex-wrap:wrap">`+
+        stat('Avg time to decision', tdFmtDays(t.avgDecide), 'var(--text)', 'Filed → accepted or rejected.')+
+        stat('Avg time to takedown', tdFmtDays(t.avgTakedown), 'var(--removed)', 'Cases that ended in a takedown.')+
+        stat('Avg time to rejection', tdFmtDays(t.avgReject), 'var(--rejected)', 'Cases that ended in a rejection.')+
+      `</div>`+
+      `<div style="font-size:11px;color:var(--muted);margin-top:12px">`+
+        (tdTimingStage==='ABR' ? 'Measured from the filing date on the Corsearch sheet to decision.' : 'Measured from the stage being marked filed to decision.')+
+        ` ${t.decidedN} case${t.decidedN===1?'':'s'} timed`+
+        (t.untimedN?` · ${t.untimedN} decided before timing started, so excluded`:'')+
+      `</div>`;
+    tEl.querySelectorAll('[data-tdt]').forEach(b=>b.addEventListener('click',()=>{tdTimingStage=b.dataset.tdt;renderTradeDress();}));
+  }
+
+  const sf = document.getElementById('td-stage-filter');
+  sf.innerHTML = `<div class="filter-group"><span class="filter-label">Stage</span>`+
+    `<button class="filter-pill ${tdStage==='all'?'active':''}" data-tds="all">All (${tradeDress.length})</button>`+
+    TD_STAGES.map(s=>`<button class="filter-pill ${tdStage===s?'active':''}" data-tds="${s}">${TD_STAGE_LABEL[s]} (${tradeDress.filter(c=>tdCurrentStage(c)===s).length})</button>`).join('')+
+    `</div>`;
+  sf.querySelectorAll('[data-tds]').forEach(b=>b.addEventListener('click',()=>{tdStage=b.dataset.tds;renderTradeDress();}));
+
+  const of = document.getElementById('td-outcome-filter');
+  of.innerHTML = `<div class="filter-group"><span class="filter-label">Outcome</span>`+
+    `<button class="filter-pill ${tdOutcome==='all'?'active':''}" data-tdo="all">All</button>`+
+    TD_OUTCOMES.map(o=>`<button class="filter-pill ${tdOutcome===o?'active':''}" data-tdo="${o}">${o}</button>`).join('')+
+    `</div>`;
+  of.querySelectorAll('[data-tdo]').forEach(b=>b.addEventListener('click',()=>{tdOutcome=b.dataset.tdo;renderTradeDress();}));
+
+  let data = tradeDress.slice();
+  if (tdStage!=='all') data = data.filter(c=>tdCurrentStage(c)===tdStage);
+  if (tdOutcome!=='all') data = data.filter(c=>tdCurrentOutcome(c)===tdOutcome);
+  document.getElementById('td-count').textContent = `${data.length} case${data.length===1?'':'s'}`;
+  const tbody = document.getElementById('td-tbody');
+  const empty = document.getElementById('td-empty');
+  if (!data.length){ tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  tbody.innerHTML = data.sort((a,b)=>new Date(b.date_added||0)-new Date(a.date_added||0)).map(tdRow).join('');
+}
+
+function tdRefCell(c){
+  const url = c.url || buildFallbackUrl(c);
+  const link = url ? `<a href="${url}" target="_blank" style="color:var(--accent2);text-decoration:none">${c.ref}</a>` : c.ref;
+  return `<span class="mono">${link}</span>`;
+}
+const TD_SLOW_DAYS = 14;
+function tdBox(c, stage){
+  const val = c[TD_STAGE_FIELD[stage]] || '';
+  const cls = TD_BOX_CLASS[val] || 'is-empty';
+  const d = tdDaysToDecide(c, stage);
+  const start = tdStartOf(c, stage);
+  let time = '&nbsp;', title = '', slow = false;
+  if (d!==null){
+    time = tdFmtDays(d);
+    title = `Filed ${tdFmtDate(start)} → decision`;
+  } else if (val && start){
+    // Still pending: flag once it has been outstanding for over two weeks.
+    slow = val==='Pending' && (Date.now() - start.getTime()) / DAY_MS > TD_SLOW_DAYS;
+    time = (slow ? '<span class="td-slow">!</span> ' : '') + 'filed '+tdFmtDate(start);
+    title = slow ? 'Pending over two weeks — no decision yet' : 'Awaiting a decision';
+  }
+  return `<div class="td-cell">`+
+    `<select class="td-box ${cls}" onchange="tdSetOutcome(${c.id},'${stage}',this.value)">`+
+      `<option value="" ${val===''?'selected':''}>&mdash;</option>`+
+      TD_OUTCOMES.map(o=>`<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join('')+
+    `</select>`+
+    `<div class="td-box-time${slow?' is-slow':''}" title="${title}">${time}</div>`+
+  `</div>`;
+}
+function tdEditCell(c, field){
+  const val = c[field]||'';
+  return `<div class="edit-cell" onclick="tdStartEdit(this,${c.id},'${field}')"><span>${val||'<span style="color:var(--muted)">—</span>'}</span><span class="edit-icon">✎</span></div>`;
+}
+function tdWeekOptions(){
+  const now = new Date(); const opts = [];
+  for (let i=-1;i<26;i++){ const d=new Date(now); d.setDate(now.getDate()-i*7); opts.push(getISOWeekLabel(d)); }
+  tradeDress.forEach(c=>{ if (c.week_label) opts.push(c.week_label); });
+  return [...new Set(opts)].sort().reverse();
+}
+function tdWeekCell(c){
+  const val = c.week_label || '';
+  const opts = tdWeekOptions();
+  if (val && !opts.includes(val)) opts.unshift(val);
+  return `<select class="inline-select td-week" onchange="tdUpdateField(${c.id},'week_label',this.value)">`+
+    `<option value="" ${val===''?'selected':''}>—</option>`+
+    opts.map(w=>`<option value="${w}" ${w===val?'selected':''}>${w}</option>`).join('')+
+    `</select>`;
+}
+function tdRow(c){
+  return `<tr>`+
+    `<td>${tdRefCell(c)}</td>`+
+    `<td style="color:var(--muted2)">${c.market||''}</td>`+
+    `<td>${tdEditCell(c,'game')}</td>`+
+    `<td>${tdBox(c,'ABR')}</td>`+
+    `<td>${tdBox(c,'C&D')}</td>`+
+    `<td>${tdBox(c,'Court')}</td>`+
+    `<td style="color:var(--muted);font-size:11px">${c.corsearch_status||''}</td>`+
+    `<td>${tdEditCell(c,'comment')}</td>`+
+    `<td>${tdWeekCell(c)}</td>`+
+    `<td><button class="del-btn" onclick="tdDel(${c.id})">×</button></td>`+
+  `</tr>`;
+}
+
+function tdStartEdit(cell, id, field){
+  const c = tradeDress.find(x=>x.id===id); const current = c?.[field]||'';
+  const input = document.createElement('input');
+  input.type='text'; input.value=current;
+  input.style.cssText='width:100%;background:var(--surface2);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-family:var(--font);font-size:11px;padding:3px 6px;outline:none;';
+  cell.innerHTML=''; cell.appendChild(input); input.focus(); input.select();
+  input.addEventListener('blur', ()=>tdUpdateField(id,field,input.value));
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') input.blur(); if(e.key==='Escape') renderTradeDress(); });
+}
+
+async function tdUpdateField(id, field, value){
+  const c = tradeDress.find(x=>x.id===id); if(!c) return;
+  const old = c[field]; c[field]=value;
+  setSyncing(true);
+  try {
+    await sbFetch(`trade_dress_cases?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({[field]:value})});
+    setSyncing(false);
+    if (field==='week_label'){ populateWeekSelectors(); renderTradeDress(); }
+  }
+  catch(e){ c[field]=old; setError(); alert('Error saving: '+e.message); renderTradeDress(); }
+}
+
+async function tdSetOutcome(id, stage, value){
+  const c = tradeDress.find(x=>x.id===id); if(!c) return;
+  const field = TD_STAGE_FIELD[stage];
+  const old = c[field]; c[field]=value;
+  setSyncing(true);
+  try { await sbFetch(`trade_dress_cases?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify({[field]:value})}); setSyncing(false); renderTradeDress(); }
+  catch(e){ c[field]=old; setError(); alert('Error saving: '+e.message); renderTradeDress(); }
+}
+
+async function tdDel(id){
+  if (!confirm('Delete this case?')) return;
+  try { await sbFetch(`trade_dress_cases?id=eq.${id}`,{method:'DELETE',prefer:'return=minimal'}); tradeDress=tradeDress.filter(c=>c.id!==id); renderTradeDress(); }
+  catch(e){ alert('Error deleting: '+e.message); }
+}
+
+// ── TRADE DRESS IMPORT ────────────────────────────────────────────────────────
+function tdMapStatus(s){
+  const t = (s||'').toLowerCase().trim();
+  if (!t) return 'Pending';
+  if (t.includes('reject')||t.includes('denied')||t.includes('declined')) return 'Rejected';
+  // "Accepted but Online" = ABR accepted but listing still live — not a takedown.
+  if (t.includes('accept') && (t.includes('online')||t.includes('live')||t.includes('still'))) return 'Accepted, still live';
+  if (t.includes('accept')||t.includes('down')||t.includes('removed')) return 'Taken down';
+  return 'Pending';
+}
+// The Corsearch sheet writes dd/mm/yyyy, but Excel reads it as mm/dd and stores
+// the ambiguous ones the wrong way round (9/7 -> 7 Sep). Swap back to recover intent.
+// Cells Excel couldn't misread (day > 12) survive as text and are parsed as dd/mm.
+// Multiple dates in one cell (a refiling) resolve to the earliest — the first filing.
+function tdParseFiledDate(v){
+  if (v===null || v===undefined || v==='') return null;
+  let d = null;
+  if (v instanceof Date && !isNaN(v)){
+    d = new Date(v.getFullYear(), v.getDate()-1, v.getMonth()+1);
+  } else {
+    const ms = [...String(v).matchAll(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g)];
+    if (!ms.length) return null;
+    const dates = ms.map(m=>{
+      const yr = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+      return new Date(yr, +m[2]-1, +m[1]);
+    }).filter(x=>!isNaN(x));
+    if (!dates.length) return null;
+    d = new Date(Math.min(...dates.map(x=>x.getTime())));
+  }
+  if (!d || isNaN(d)) return null;
+  return d;
+}
+function tdFmtDate(d){
+  if (!d) return '';
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+function tdParseUrl(raw){  let url = (raw||'').trim();
+  try { const u=new URL(url); url=u.origin+u.pathname.replace(/\/$/,''); } catch(e){}
+  let market='';
+  for (const dom in AMZ_DOMAINS){ if ((raw||'').includes(dom)){ market=AMZ_DOMAINS[dom]; break; } }
+  const m = (raw||'').match(/\/dp\/([A-Z0-9]{10})/) || (raw||'').match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
+  return {url, market, ref: m?m[1]:''};
+}
+
+async function tdImportFile(input){
+  const file = input.files && input.files[0];
+  const prev = document.getElementById('td-preview');
+  if (!file){ return; }
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array', cellDates:true});
+    const raw = [];
+    wb.SheetNames.forEach(name=>{
+      const ws = wb.Sheets[name];
+      if (!ws || !ws['!ref']) return;
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      let headerRow = range.s.r, colUrl=-1, colStatus=-1, colComment=-1, colLabel=-1, colFiled=-1;
+      for (let r=range.s.r; r<=Math.min(range.s.r+6, range.e.r); r++){
+        for (let cc=range.s.c; cc<=range.e.c; cc++){
+          const cell = ws[XLSX.utils.encode_cell({r, c:cc})];
+          const v = cell && cell.v!=null ? (''+cell.v).toLowerCase().trim() : '';
+          if (!v) continue;
+          if (v.includes('filed')||v.includes('date filed')){ colFiled=cc; headerRow=r; }
+          else if (v.includes('url')){ colUrl=cc; headerRow=r; }
+          else if (v==='status'){ colStatus=cc; headerRow=r; }
+          else if (v.includes('comment')){ colComment=cc; headerRow=r; }
+          else if (v.includes('label')){ colLabel=cc; headerRow=r; }
+        }
+        if (colUrl>=0 && colStatus>=0) break;
+      }
+      if (colUrl<0) return;
+      for (let r=headerRow+1; r<=range.e.r; r++){
+        const uCell = ws[XLSX.utils.encode_cell({r, c:colUrl})];
+        if (!uCell) continue;
+        const url = (uCell.l && uCell.l.Target) ? uCell.l.Target : (uCell.v!=null ? (''+uCell.v) : '');
+        if (!url || !/https?:\/\//i.test(url)) continue;
+        const sCell = colStatus>=0 ? ws[XLSX.utils.encode_cell({r, c:colStatus})] : null;
+        const cCell = colComment>=0 ? ws[XLSX.utils.encode_cell({r, c:colComment})] : null;
+        const lCell = colLabel>=0 ? ws[XLSX.utils.encode_cell({r, c:colLabel})] : null;
+        const fCell = colFiled>=0 ? ws[XLSX.utils.encode_cell({r, c:colFiled})] : null;
+        raw.push({
+          url,
+          status: sCell && sCell.v!=null ? (''+sCell.v) : '',
+          comment: cCell && cCell.v!=null ? (''+cCell.v) : '',
+          label: lCell && lCell.v!=null ? (''+lCell.v) : '',
+          filedRaw: fCell && fCell.v!=null ? fCell.v : null,
+          sheet: name
+        });
+      }
+    });
+    if (!raw.length){ prev.innerHTML='<span style="color:var(--rejected)">No rows with links found in that file.</span>'; return; }
+    tdParsed = raw.map(row=>{
+      const {url, market, ref} = tdParseUrl(row.url);
+      const label = (row.label||'').trim();
+      const isTD = !label || /trade\s*dress/i.test(label);
+      const filed = tdParseFiledDate(row.filedRaw);
+      const futureFiled = filed ? filed.getTime() > Date.now() : false;
+      return {ref, market, url, status:row.status, comment:row.comment, label, isTD,
+              filed, futureFiled,
+              abr:tdMapStatus(row.status), sheet:row.sheet,
+              ok:!!ref&&!!market&&isTD&&!futureFiled};
+    });
+    tdRenderPreview();
+  } catch(e){ prev.innerHTML=`<span style="color:var(--rejected)">Couldn't read file: ${e.message}</span>`; }
+  finally { input.value=''; }
+}
+
+function tdParseImport(){
+  const txt = document.getElementById('td-import-text').value;
+  const lines = txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  tdParsed = [];
+  for (const line of lines){
+    const cells = line.split('\t').map(c=>c.trim());
+    const urlCell = cells.find(c=>/https?:\/\//i.test(c)) || cells[0];
+    const rest = cells.filter(c=>c!==urlCell && c.toLowerCase()!=='trade dress');
+    const status = rest[0]||'';
+    const comment = rest.slice(1).join(' ')||'';
+    const {url,market,ref} = tdParseUrl(urlCell);
+    tdParsed.push({ref,market,url,status,comment,label:'',isTD:true,filed:null,futureFiled:false,abr:tdMapStatus(status),sheet:'',ok:!!ref&&!!market});
+  }
+  tdRenderPreview();
+}
+
+function tdRenderPreview(){
+  const prev = document.getElementById('td-preview');
+  const btn = document.getElementById('td-import-btn');
+  if (!tdParsed.length){ prev.innerHTML='<span style="color:var(--rejected)">Nothing to import.</span>'; btn.style.display='none'; return; }
+  const existing = new Map(tradeDress.map(c=>[c.ref+'|'+c.market,c]));
+  const esc = s => (s==null?'':(''+s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const hasSheet = tdParsed.some(p=>p.sheet);
+  const rows = tdParsed.map(p=>{
+    const ex = existing.get(p.ref+'|'+p.market);
+    const tag = !p.isTD ? `<span style="color:var(--muted)">skip (${esc(p.label)})</span>`
+      : p.futureFiled ? `<span style="color:var(--rejected)">skip (filing date in the future)</span>`
+      : !p.ok ? '<span style="color:var(--rejected)">skip (no ASIN / market)</span>'
+      : ex ? (((ex.abr_outcome||'Pending')!==p.abr) ? `<span style="color:var(--reported)">update → ${p.abr}</span>` : '<span style="color:var(--muted2)">refresh</span>')
+      : '<span style="color:var(--removed)">new</span>';
+    const box = p.ok ? `<span class="td-box ${TD_BOX_CLASS[p.abr]}" style="width:auto;padding:2px 8px;pointer-events:none">${p.abr}</span>` : '';
+    const filed = p.filed ? esc(tdFmtDate(p.filed)) : `<span style="color:var(--muted)">—</span>`;
+    return `<tr>${hasSheet?`<td style="color:var(--muted)">${esc(p.sheet||'')}</td>`:''}<td class="mono">${esc(p.ref||'—')}</td><td style="color:var(--muted2)">${esc(p.market||'—')}</td><td>${box}</td><td style="color:var(--muted2);font-size:11px">${filed}</td><td style="color:var(--muted)">${esc(p.status||'')}</td><td>${tag}</td></tr>`;
+  }).join('');
+  const nNew = tdParsed.filter(p=>p.ok&&!existing.has(p.ref+'|'+p.market)).length;
+  const nUpd = tdParsed.filter(p=>p.ok&&existing.has(p.ref+'|'+p.market)).length;
+  const nBad = tdParsed.filter(p=>!p.ok).length;
+  const nDated = tdParsed.filter(p=>p.ok&&p.filed).length;
+  prev.innerHTML = `<div style="margin:8px 0 6px;color:var(--muted)">${nNew} new · ${nUpd} to refresh · ${nBad} skipped${nDated?` · ${nDated} with a filing date`:''}</div>`+
+    `<div class="table-wrap"><table><thead><tr>${hasSheet?'<th>Sheet</th>':''}<th>Ref</th><th>Market</th><th>ABR</th><th>Filed</th><th>Corsearch status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  btn.style.display = (nNew+nUpd)>0 ? 'inline-block' : 'none';
+}
+
+async function tdRunImport(){
+  const existing = new Map(tradeDress.map(c=>[c.ref+'|'+c.market,c]));
+  const today = new Date();
+  const iso = document.getElementById('td-import-week')?.value || getISOWeekLabel(today);
+  const dstr = today.toISOString().split('T')[0];
+  const seen = new Set(); const toInsert = []; const toUpdate = [];
+  for (const p of tdParsed){
+    if (!p.ok) continue;
+    const key = p.ref+'|'+p.market;
+    if (existing.has(key)) toUpdate.push({c:existing.get(key), p});
+    else if (!seen.has(key)){
+      seen.add(key);
+      const row = {ref:p.ref,market:p.market,url:p.url,game:'',abr_outcome:p.abr,cd_outcome:'',court_outcome:'',corsearch_status:p.status,comment:p.comment,date_added:dstr,week_label:iso};
+      if (p.filed) row.abr_filed_at = p.filed.toISOString();
+      toInsert.push(row);
+    }
+  }
+  const btn = document.getElementById('td-import-btn'); btn.disabled=true; btn.textContent='Importing...';
+  setSyncing(true);
+  try {
+    if (toInsert.length){
+      const res = await sbFetch('trade_dress_cases',{method:'POST',prefer:'return=representation',body:JSON.stringify(toInsert)});
+      if (Array.isArray(res)) tradeDress.unshift(...res);
+    }
+    for (const {c,p} of toUpdate){
+      const patch = {corsearch_status:p.status, abr_outcome:p.abr};
+      if (p.comment) patch.comment = p.comment;
+      if (p.filed){
+        // Keep the first filing we know about.
+        const cur = c.abr_filed_at ? new Date(c.abr_filed_at) : null;
+        if (!cur || p.filed < cur) patch.abr_filed_at = p.filed.toISOString();
+      }
+      await sbFetch(`trade_dress_cases?id=eq.${c.id}`,{method:'PATCH',prefer:'return=minimal',body:JSON.stringify(patch)});
+      Object.assign(c, patch);
+    }
+    setSyncing(false);
+    const tx = document.getElementById('td-import-text'); if (tx) tx.value='';
+    document.getElementById('td-preview').innerHTML=`<span style="color:var(--accent2)">Imported ${toInsert.length} new, updated ${toUpdate.length}, filed under ${iso}.</span>`;
+    btn.style.display='none';
+    populateWeekSelectors();
+    renderTradeDress();
+  } catch(e){ setError(); document.getElementById('td-preview').innerHTML=`<span style="color:var(--rejected)">Error: ${e.message}</span>`; }
+  finally { btn.disabled=false; btn.textContent='Import'; }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', initAuth);
+setInterval(loadListings, 60000);
+setInterval(loadTradeDress, 60000);
+</script>
+</body>
+</html>
